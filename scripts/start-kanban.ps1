@@ -145,7 +145,7 @@ while ((Get-Date) -lt $deadline -and -not $tunnelUrl) {
             $combined += Get-Content -LiteralPath $path -Raw -ErrorAction SilentlyContinue
         }
     }
-    $match = [Regex]::Match($combined, "https://[-a-z0-9]+\.trycloudflare\.com")
+    $match = [Regex]::Match($combined, "https://(?!api\.)[-a-z0-9]+\.trycloudflare\.com")
     if ($match.Success) {
         $tunnelUrl = $match.Value
         break
