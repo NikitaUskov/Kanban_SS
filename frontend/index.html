@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light">
+    <meta name="description" content="Многопользовательская канбан-доска">
+    <title>Kanban Board</title>
+    <link rel="stylesheet" href="./assets/css/styles.css">
+  </head>
+  <body>
+    <div id="connection-banner" class="connection-banner" data-state="starting" role="status">
+      Сервер запускается
+    </div>
+
+    <main id="login-view" class="login-layout">
+      <section class="login-card" aria-labelledby="login-title">
+        <div class="brand-mark" aria-hidden="true">K</div>
+        <h1 id="login-title">Kanban Board</h1>
+        <p class="muted">Войдите с учётной записью, созданной администратором.</p>
+        <form id="login-form" class="stack">
+          <label>
+            Имя пользователя
+            <input
+              id="login-username"
+              name="username"
+              autocomplete="username"
+              maxlength="80"
+              required
+            >
+          </label>
+          <label>
+            Пароль
+            <input
+              id="login-password"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            >
+          </label>
+          <p id="login-error" class="form-error" role="alert" hidden></p>
+          <button class="button button--primary button--full" type="submit">Войти</button>
+        </form>
+        <p class="login-note">Если сервер перезапускается, страница подключится автоматически.</p>
+      </section>
+    </main>
+
+    <div id="app-shell" hidden>
+      <header class="app-header">
+        <button id="home-button" class="brand-button" type="button" aria-label="К списку досок">
+          <span class="brand-mark brand-mark--small" aria-hidden="true">K</span>
+          <span>Kanban Board</span>
+        </button>
+        <div class="header-actions">
+          <span id="connection-pill" class="connection-pill" data-state="starting">Сервер запускается</span>
+          <span id="current-user" class="current-user"></span>
+          <button id="about-button" class="button button--ghost" type="button">О системе</button>
+          <button id="change-password-button" class="button button--ghost" type="button">
+            Сменить пароль
+          </button>
+          <button id="logout-button" class="button button--secondary" type="button">Выйти</button>
+        </div>
+      </header>
+
+      <main class="app-main">
+        <section id="boards-view" aria-labelledby="boards-title">
+          <div class="page-heading">
+            <div>
+              <p class="eyebrow">Общее пространство</p>
+              <h1 id="boards-title">Все доски</h1>
+              <p class="muted">Каждый активный пользователь видит и редактирует эти доски.</p>
+            </div>
+            <div class="button-row">
+              <button id="toggle-board-archive" class="button button--secondary" type="button">
+                Показать архив
+              </button>
+              <button id="create-board-button" class="button button--primary" type="button">
+                Создать доску
+              </button>
+            </div>
+          </div>
+          <div id="boards-loading" class="empty-state">Загрузка досок…</div>
+          <div id="boards-grid" class="boards-grid" aria-live="polite"></div>
+        </section>
+
+        <section id="board-view" hidden aria-labelledby="board-title">
+          <div class="board-topbar">
+            <button id="back-to-boards" class="button button--ghost" type="button">К доскам</button>
+            <div class="board-heading">
+              <h1 id="board-title"></h1>
+              <p id="board-description" class="muted"></p>
+            </div>
+            <div class="button-row">
+              <button id="activity-button" class="button button--secondary" type="button">
+                Журнал
+              </button>
+              <button id="card-archive-button" class="button button--secondary" type="button">
+                Архив карточек
+              </button>
+              <button id="edit-board-button" class="button button--secondary" type="button">
+                Настройки
+              </button>
+              <button id="create-column-button" class="button button--primary" type="button">
+                Добавить колонку
+              </button>
+            </div>
+          </div>
+
+          <div class="filters" aria-label="Фильтры карточек">
+            <label class="filter-search">
+              <span>Поиск</span>
+              <input id="filter-query" type="search" placeholder="Название или описание">
+            </label>
+            <label>
+              <span>Приоритет</span>
+              <select id="filter-priority">
+                <option value="">Все</option>
+                <option value="low">Низкий</option>
+                <option value="normal">Обычный</option>
+                <option value="high">Высокий</option>
+                <option value="critical">Критический</option>
+              </select>
+            </label>
+            <label>
+              <span>Колонка</span>
+              <select id="filter-column"><option value="">Все</option></select>
+            </label>
+            <label>
+              <span>Срок</span>
+              <select id="filter-due">
+                <option value="">Все</option>
+                <option value="with">Со сроком</option>
+                <option value="without">Без срока</option>
+                <option value="overdue">Просроченные</option>
+              </select>
+            </label>
+            <label>
+              <span>Последнее изменение</span>
+              <select id="filter-user"><option value="">Все пользователи</option></select>
+            </label>
+            <button id="clear-filters" class="button button--ghost filter-reset" type="button">
+              Сбросить
+            </button>
+          </div>
+          <p id="drag-filter-note" class="notice" hidden>
+            Перетаскивание отключено, пока действует фильтр.
+          </p>
+          <div id="board-columns" class="board-columns" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="board-dialog" class="modal">
+      <form id="board-form" method="dialog" class="modal-form">
+        <div class="modal-heading">
+          <h2 id="board-dialog-title">Новая доска</h2>
+          <button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button>
+        </div>
+        <input id="board-form-id" type="hidden">
+        <label>
+          Название
+          <input id="board-form-title" maxlength="120" required>
+        </label>
+        <label>
+          Описание
+          <textarea id="board-form-description" maxlength="2000" rows="5"></textarea>
+        </label>
+        <label id="default-columns-label" class="checkbox-line">
+          <input id="board-form-defaults" type="checkbox" checked>
+          Создать стандартные колонки
+        </label>
+        <div id="board-danger-zone" class="danger-zone" hidden>
+          <p>Архивная доска не принимает новые изменения, но все данные сохраняются.</p>
+          <button id="archive-board-button" class="button button--danger" type="button">
+            Переместить доску в архив
+          </button>
+        </div>
+        <p id="board-form-error" class="form-error" role="alert" hidden></p>
+        <div class="modal-actions">
+          <button class="button button--secondary" value="cancel" formnovalidate>Отмена</button>
+          <button class="button button--primary" type="submit">Сохранить</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="card-dialog" class="modal modal--wide">
+      <form id="card-form" method="dialog" class="modal-form">
+        <div class="modal-heading">
+          <h2 id="card-dialog-title">Новая карточка</h2>
+          <button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button>
+        </div>
+        <input id="card-form-id" type="hidden">
+        <label>
+          Колонка
+          <select id="card-form-column" required></select>
+        </label>
+        <label>
+          Название
+          <input id="card-form-title" maxlength="200" required>
+        </label>
+        <label>
+          Описание
+          <textarea id="card-form-description" maxlength="20000" rows="8"></textarea>
+        </label>
+        <div class="form-grid">
+          <label>
+            Приоритет
+            <select id="card-form-priority">
+              <option value="low">Низкий</option>
+              <option value="normal">Обычный</option>
+              <option value="high">Высокий</option>
+              <option value="critical">Критический</option>
+            </select>
+          </label>
+          <label>
+            Срок
+            <input id="card-form-due" type="datetime-local">
+          </label>
+        </div>
+        <div id="card-danger-zone" class="danger-zone" hidden>
+          <button id="archive-card-button" class="button button--danger" type="button">
+            Переместить карточку в архив
+          </button>
+        </div>
+        <p id="card-form-error" class="form-error" role="alert" hidden></p>
+        <div class="modal-actions">
+          <button class="button button--secondary" value="cancel" formnovalidate>Отмена</button>
+          <button class="button button--primary" type="submit">Сохранить</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="column-dialog" class="modal">
+      <form id="column-form" method="dialog" class="modal-form">
+        <div class="modal-heading">
+          <h2 id="column-dialog-title">Новая колонка</h2>
+          <button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button>
+        </div>
+        <input id="column-form-id" type="hidden">
+        <label>
+          Название
+          <input id="column-form-title" maxlength="80" required>
+        </label>
+        <label>
+          WIP-лимит
+          <input id="column-form-wip" type="number" min="1" max="999" placeholder="Без лимита">
+        </label>
+        <label class="checkbox-line">
+          <input id="column-form-done" type="checkbox">
+          Считать карточки в этой колонке завершёнными
+        </label>
+        <div id="column-danger-zone" class="danger-zone" hidden>
+          <button id="delete-column-button" class="button button--danger" type="button">
+            Удалить колонку
+          </button>
+        </div>
+        <p id="column-form-error" class="form-error" role="alert" hidden></p>
+        <div class="modal-actions">
+          <button class="button button--secondary" value="cancel" formnovalidate>Отмена</button>
+          <button class="button button--primary" type="submit">Сохранить</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="column-delete-dialog" class="modal">
+      <form id="column-delete-form" method="dialog" class="modal-form">
+        <div class="modal-heading">
+          <h2>Удаление колонки</h2>
+          <button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button>
+        </div>
+        <p id="column-delete-message"></p>
+        <label>
+          Действие с карточками
+          <select id="column-delete-action">
+            <option value="move">Перенести в другую колонку</option>
+            <option value="archive">Переместить карточки в архив</option>
+          </select>
+        </label>
+        <label id="column-delete-target-label">
+          Целевая колонка
+          <select id="column-delete-target"></select>
+        </label>
+        <p id="column-delete-error" class="form-error" role="alert" hidden></p>
+        <div class="modal-actions">
+          <button class="button button--secondary" value="cancel" formnovalidate>Отмена</button>
+          <button class="button button--danger" type="submit">Удалить колонку</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="activity-dialog" class="modal modal--wide">
+      <div class="modal-form">
+        <div class="modal-heading">
+          <h2>Журнал действий</h2>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Закрыть">×</button>
+        </div>
+        <div id="activity-list" class="activity-list"></div>
+      </div>
+    </dialog>
+
+    <dialog id="card-archive-dialog" class="modal modal--wide">
+      <div class="modal-form">
+        <div class="modal-heading">
+          <h2>Архив карточек</h2>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Закрыть">×</button>
+        </div>
+        <div id="card-archive-list" class="archive-list"></div>
+      </div>
+    </dialog>
+
+    <dialog id="about-dialog" class="modal">
+      <div class="modal-form">
+        <div class="modal-heading">
+          <h2>О системе</h2>
+          <button class="icon-button" type="button" data-close-dialog aria-label="Закрыть">×</button>
+        </div>
+        <p>Kanban Board MVP предназначен для совместной работы небольшой команды.</p>
+        <dl class="about-list">
+          <div><dt>Frontend</dt><dd id="about-frontend-version">—</dd></div>
+          <div><dt>Backend</dt><dd id="about-backend-version">—</dd></div>
+          <div><dt>API</dt><dd id="about-api-version">—</dd></div>
+          <div><dt>Конфигурация</dt><dd id="about-config-version">—</dd></div>
+        </dl>
+        <p class="notice">
+          Не храните здесь пароли сторонних сервисов, платёжные данные, конфиденциальные
+          документы и другие критичные сведения. Quick Tunnel не имеет SLA; работа с данными
+          возможна только при включённом компьютере владельца.
+        </p>
+      </div>
+    </dialog>
+
+    <dialog id="password-dialog" class="modal">
+      <form id="password-form" method="dialog" class="modal-form">
+        <div class="modal-heading">
+          <h2>Смена пароля</h2>
+          <button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button>
+        </div>
+        <label>
+          Текущий пароль
+          <input
+            id="password-current"
+            type="password"
+            autocomplete="current-password"
+            required
+          >
+        </label>
+        <label>
+          Новый пароль
+          <input
+            id="password-new"
+            type="password"
+            autocomplete="new-password"
+            minlength="8"
+            required
+          >
+        </label>
+        <label>
+          Повторите новый пароль
+          <input
+            id="password-repeat"
+            type="password"
+            autocomplete="new-password"
+            minlength="8"
+            required
+          >
+        </label>
+        <p id="password-form-error" class="form-error" role="alert" hidden></p>
+        <div class="modal-actions">
+          <button class="button button--secondary" value="cancel" formnovalidate>Отмена</button>
+          <button class="button button--primary" type="submit">Сменить пароль</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+    <script type="module" src="./assets/js/app.js"></script>
+  </body>
+</html>

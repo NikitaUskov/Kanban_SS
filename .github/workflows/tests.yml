@@ -1,0 +1,97 @@
+name: Tests
+
+on:
+  push:
+    branches: ["main", "feature/**", "fix/**", "release/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      APP_ENV: test
+      DATABASE_URL: sqlite:///./ci-kanban.db
+      LOG_DIR: ./ci-logs
+      JWT_SECRET: ci-only-secret-with-more-than-thirty-two-characters
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Lint
+        run: python -m ruff check app scripts tests
+
+      - name: Check formatting
+        run: python -m ruff format --check app scripts tests
+
+      - name: Apply migrations
+        run: python -m alembic upgrade head
+
+      - name: Check migration/model parity
+        run: python -m alembic check
+
+      - name: Run tests
+        run: python -m pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Check JavaScript syntax
+        run: |
+          for file in frontend/assets/js/*.js; do
+            node --check "$file"
+          done
+
+      - name: Run frontend unit tests
+        run: npm --prefix frontend test
+
+      - name: Validate runtime config
+        run: |
+          node --input-type=module -e \
+            "import fs from 'node:fs'; import {validateRuntimeConfig} from './frontend/assets/js/config.js'; validateRuntimeConfig(JSON.parse(fs.readFileSync('./frontend/runtime-config.json', 'utf8')));"
+
+  repository-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Reject tracked secrets and databases
+        shell: bash
+        run: |
+          forbidden="$(git ls-files | grep -E '(^|/)\.env$|\.db($|-shm$|-wal$)|(^|/)backups/|(^|/)logs/' || true)"
+          if [ -n "$forbidden" ]; then
+            echo "Tracked runtime files are forbidden:"
+            echo "$forbidden"
+            exit 1
+          fi
+          if git grep -n -E 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY' -- . ':!*.example*'; then
+            echo "A private key marker was found."
+            exit 1
+          fi
+

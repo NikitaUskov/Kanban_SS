@@ -1,0 +1,7 @@
+{
+  "apiBaseUrl": "https://invalid.invalid/api/v1",
+  "generatedAt": null,
+  "configVersion": 1,
+  "appVersion": "1.0.0",
+  "apiVersion": "v1"
+}

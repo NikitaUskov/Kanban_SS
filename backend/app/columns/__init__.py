@@ -1,0 +1,2 @@
+"""Board columns domain."""
+

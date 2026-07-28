@@ -1,0 +1,2 @@
+"""Health endpoints domain."""
+

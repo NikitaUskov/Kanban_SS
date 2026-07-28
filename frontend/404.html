@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Kanban Board</title>
+    <script>
+      const segments = window.location.pathname.split("/").filter(Boolean);
+      const base = segments.length ? `/${segments[0]}/` : "/";
+      window.location.replace(`${window.location.origin}${base}`);
+    </script>
+  </head>
+  <body>
+    <p><a href="./">Вернуться к Kanban Board</a></p>
+  </body>
+</html>
+
