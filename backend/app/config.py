@@ -2,9 +2,10 @@
 
 from functools import lru_cache
 from pathlib import Path
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from app import API_VERSION, APP_VERSION
 
@@ -29,7 +30,7 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_hours: int = Field(default=12, ge=1, le=168)
     refresh_token_expire_days: int = Field(default=30, ge=1, le=365)
-    allowed_origins: list[str] = Field(
+    allowed_origins: Annotated[list[str], NoDecode] = Field(
         default_factory=lambda: [
             "http://127.0.0.1:5500",
             "http://localhost:5500",
@@ -64,9 +65,15 @@ class Settings(BaseSettings):
     def validate_production_secret(cls, value: str, info) -> str:
         app_env = (info.data.get("app_env") or "development").lower()
         if app_env == "production":
-            placeholders = {"", "<generate-locally>", "development-only-change-me-before-public-use"}
+            placeholders = {
+                "",
+                "<generate-locally>",
+                "development-only-change-me-before-public-use",
+            }
             if value in placeholders or len(value) < 32:
-                raise ValueError("JWT_SECRET must be generated locally and contain at least 32 characters")
+                raise ValueError(
+                    "JWT_SECRET must be generated locally and contain at least 32 characters"
+                )
         return value
 
 

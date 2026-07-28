@@ -3,7 +3,6 @@
 import argparse
 import json
 import os
-import sqlite3
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -54,4 +53,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

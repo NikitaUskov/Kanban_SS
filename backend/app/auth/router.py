@@ -56,4 +56,3 @@ def change_password_route(
 ) -> MessageResponse:
     change_password(db, user, payload.current_password, payload.new_password)
     return MessageResponse(message="Пароль изменён. Выполните вход повторно на других устройствах")
-

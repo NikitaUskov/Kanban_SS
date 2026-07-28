@@ -78,9 +78,7 @@ class Board(Base, TimestampMixin):
     columns: Mapped[list[Column]] = relationship(
         back_populates="board", cascade="all, delete-orphan", order_by="Column.position"
     )
-    cards: Mapped[list[Card]] = relationship(
-        back_populates="board", cascade="all, delete-orphan"
-    )
+    cards: Mapped[list[Card]] = relationship(back_populates="board", cascade="all, delete-orphan")
 
 
 class Column(Base, TimestampMixin):

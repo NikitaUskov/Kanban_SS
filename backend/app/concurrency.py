@@ -1,8 +1,8 @@
 """In-process write serialization for SQLite mutations."""
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from threading import RLock
-from typing import Iterator
 
 
 class WriteCoordinator:
@@ -20,4 +20,3 @@ class WriteCoordinator:
 
 
 write_coordinator = WriteCoordinator()
-

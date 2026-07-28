@@ -110,7 +110,9 @@ def main() -> int:
                     logger.info("admin_action=user_created_batch username=%s", user.username)
                 print(f"Создано пользователей: {len(users)}")
     except (AppError, ValueError, OSError) as exc:
-        logger.error("admin_action_failed command=%s error_type=%s", args.command, type(exc).__name__)
+        logger.error(
+            "admin_action_failed command=%s error_type=%s", args.command, type(exc).__name__
+        )
         print(f"Ошибка: {exc}", file=sys.stderr)
         return 1
     return 0
@@ -118,4 +120,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

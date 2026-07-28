@@ -74,4 +74,3 @@ def move_card_route(
     card_id: UUID, payload: CardMove, db: DbSession, user: CurrentUser
 ) -> CardResponse:
     return move_card(db, str(card_id), payload, user)
-

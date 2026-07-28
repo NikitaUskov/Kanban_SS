@@ -76,4 +76,3 @@ def ready() -> ReadyResponse:
         alembic_revision=EXPECTED_ALEMBIC_REVISION,
         required_tables=sorted(REQUIRED_TABLES),
     )
-

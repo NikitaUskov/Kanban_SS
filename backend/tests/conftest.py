@@ -82,4 +82,3 @@ def board(client, owner_headers):
     )
     assert response.status_code == 201, response.text
     return response.json()
-

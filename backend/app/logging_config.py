@@ -35,4 +35,3 @@ def configure_logging() -> None:
     root.addHandler(console)
     root.addHandler(file_handler)
     root._kanban_configured = True  # type: ignore[attr-defined]
-

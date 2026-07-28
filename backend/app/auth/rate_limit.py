@@ -47,4 +47,3 @@ class LoginAttemptLimiter:
 
 
 login_limiter = LoginAttemptLimiter()
-

@@ -56,7 +56,9 @@ def add_activity(
     return entry
 
 
-def list_activity(db: Session, board_id: str, limit: int, before_id: int | None) -> list[ActivityLog]:
+def list_activity(
+    db: Session, board_id: str, limit: int, before_id: int | None
+) -> list[ActivityLog]:
     statement = (
         select(ActivityLog)
         .options(joinedload(ActivityLog.actor))

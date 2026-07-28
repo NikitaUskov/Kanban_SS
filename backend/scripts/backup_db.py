@@ -44,9 +44,7 @@ def verify_database(path: Path) -> dict[str, object]:
         missing = sorted(REQUIRED_TABLES - tables)
         if missing:
             raise RuntimeError(f"Отсутствуют таблицы: {', '.join(missing)}")
-        revision = connection.execute(
-            "SELECT version_num FROM alembic_version LIMIT 1"
-        ).fetchone()
+        revision = connection.execute("SELECT version_num FROM alembic_version LIMIT 1").fetchone()
         revision_value = revision[0] if revision else None
         if revision_value != EXPECTED_ALEMBIC_REVISION:
             raise RuntimeError(
@@ -66,9 +64,11 @@ def verify_database(path: Path) -> dict[str, object]:
 
 def sqlite_backup(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(source, timeout=10) as source_db:
-        with sqlite3.connect(destination) as destination_db:
-            source_db.backup(destination_db, pages=256, sleep=0.05)
+    with (
+        sqlite3.connect(source, timeout=10) as source_db,
+        sqlite3.connect(destination) as destination_db,
+    ):
+        source_db.backup(destination_db, pages=256, sleep=0.05)
 
 
 def apply_retention(directory: Path, protected: Path) -> list[str]:
@@ -142,4 +142,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

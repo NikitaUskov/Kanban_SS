@@ -95,4 +95,3 @@ class BoardSnapshot(BaseModel):
     columns: list[ColumnResponse]
     cards: list[CardResponse]
     server_time: datetime
-

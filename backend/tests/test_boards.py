@@ -3,9 +3,7 @@
 from uuid import uuid4
 
 
-def test_all_active_users_see_the_same_board(
-    client, board, owner_headers, colleague_headers
-):
+def test_all_active_users_see_the_same_board(client, board, owner_headers, colleague_headers):
     owner_list = client.get("/api/v1/boards", headers=owner_headers)
     colleague_list = client.get("/api/v1/boards", headers=colleague_headers)
     assert owner_list.status_code == 200
@@ -56,4 +54,3 @@ def test_board_archive_and_restore(client, board, owner_headers):
     )
     assert restored.status_code == 200
     assert restored.json()["archived_at"] is None
-

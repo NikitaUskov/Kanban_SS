@@ -99,4 +99,3 @@ class ColumnOrderResponse(BaseModel):
     revision: int
     version: int
     columns: list[ColumnResponse]
-

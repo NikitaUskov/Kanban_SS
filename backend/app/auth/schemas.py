@@ -60,4 +60,3 @@ class TokenPair(BaseModel):
     expires_in: int
     refresh_expires_in: int
     user: UserPublic
-

@@ -36,7 +36,7 @@ export function validateRuntimeConfig(value) {
 
 export class RuntimeConfigStore {
   constructor({
-    fetchImpl = globalThis.fetch,
+    fetchImpl = (...args) => globalThis.fetch(...args),
     documentBase = globalThis.document?.baseURI || "http://localhost/",
   } = {}) {
     this.fetchImpl = fetchImpl;

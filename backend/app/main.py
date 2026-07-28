@@ -55,4 +55,3 @@ app.include_router(auth_router, prefix=api_prefix)
 app.include_router(boards_router, prefix=api_prefix)
 app.include_router(columns_router, prefix=api_prefix)
 app.include_router(cards_router, prefix=api_prefix)
-
