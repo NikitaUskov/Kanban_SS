@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$InstallRoot = "C:\Kanban",
     [string]$GitHubOwner = "",
     [string]$RepositoryName = "",

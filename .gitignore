@@ -1,0 +1,16 @@
+
+# Python runtime
+__pycache__/
+*.py[cod]
+backend/.venv/
+# Local configuration and secrets
+backend/.env
+.env
+# Runtime data
+data/
+logs/
+backups/
+run/
+*.db
+*.db-shm
+*.db-wal

@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 function Write-Utf8NoBom {
@@ -77,7 +77,7 @@ function Stop-KanbanPidProcess {
     )
     if (-not (Test-Path $PidFile)) {
         if (-not $Quiet) {
-            Write-Host "$Label: PID-файл отсутствует, пропуск."
+            Write-Host "${Label}: PID-файл отсутствует, пропуск."
         }
         return
     }
@@ -90,7 +90,7 @@ function Stop-KanbanPidProcess {
     if ($null -eq $processInfo) {
         Remove-Item -LiteralPath $PidFile -Force
         if (-not $Quiet) {
-            Write-Host "$Label: процесс уже завершён."
+            Write-Host "${Label}: процесс уже завершён."
         }
         return
     }

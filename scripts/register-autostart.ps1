@@ -1,4 +1,4 @@
-param(
+﻿param(
     [string]$StartTaskName = "KanbanBoard-Autostart",
     [string]$BackupTaskName = "KanbanBoard-DailyBackup"
 )
