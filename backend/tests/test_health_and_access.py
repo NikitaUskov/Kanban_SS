@@ -10,7 +10,7 @@ def test_health_uses_versioned_public_contract(client):
     response = client.get("/api/v1/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert response.json()["appVersion"] == "1.0.0"
+    assert response.json()["appVersion"] == "1.1.0"
     assert response.json()["apiVersion"] == "v1"
     assert "app_version" not in response.json()
     UUID(response.headers["X-Request-ID"])

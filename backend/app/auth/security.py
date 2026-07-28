@@ -99,3 +99,4 @@ def hash_token(token: str) -> str:
     """Store only a deterministic SHA-256 digest of refresh tokens."""
 
     return sha256(token.encode("utf-8")).hexdigest()
+

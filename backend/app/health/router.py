@@ -16,3 +16,4 @@ def health_route() -> HealthResponse:
 @router.get("/ready", response_model=ReadyResponse)
 def ready_route() -> ReadyResponse:
     return ready()
+

@@ -35,6 +35,7 @@ let pollTimer = null;
 let recoveryTimer = null;
 let dragContext = null;
 let dropInProgress = false;
+let filtersPanelOpen = false;
 
 const api = new ApiClient(configStore, {
   onConnected: () => {
@@ -219,10 +220,42 @@ async function enterApplication(user) {
   await loadBoards();
 }
 
+function activeFilterCount() {
+  return [
+    state.filters.query.trim(),
+    state.filters.priority,
+    state.filters.columnId,
+    state.filters.due,
+    state.filters.updatedBy,
+  ].filter(Boolean).length;
+}
+
+function updateFilterToggle() {
+  const toggle = byId("toggle-filters");
+  const count = activeFilterCount();
+  toggle.textContent = count ? `Фильтры · ${count}` : "Фильтры";
+  toggle.classList.toggle("filter-toggle--active", count > 0);
+  toggle.setAttribute("aria-expanded", String(filtersPanelOpen));
+}
+
+function setFiltersPanelOpen(open, { persist = true } = {}) {
+  filtersPanelOpen = Boolean(open);
+  byId("filters-panel").hidden = !filtersPanelOpen;
+  byId("board-workspace").classList.toggle(
+    "board-workspace--filters-open",
+    filtersPanelOpen,
+  );
+  if (persist) {
+    localStorage.setItem("kanban.filters.open", filtersPanelOpen ? "1" : "0");
+  }
+  updateFilterToggle();
+}
+
 function showBoardsView() {
   stopPolling();
   state.currentBoardId = null;
   state.snapshot = null;
+  setFiltersPanelOpen(false, { persist: false });
   setHidden("board-view", true);
   setHidden("boards-view", false);
 }
@@ -263,11 +296,6 @@ function renderBoards() {
       className: "board-card__description",
       text: board.description || "Без описания",
     });
-    const meta = element("div", { className: "board-card__meta" }, [
-      element("span", { text: `${board.column_count} колонок` }),
-      element("span", { text: `${board.active_card_count} карточек` }),
-      element("span", { text: `Обновлено ${formatDateTime(board.updated_at)}` }),
-    ]);
     const actions = element("div", { className: "board-card__actions" });
     if (state.archivedBoards) {
       actions.append(
@@ -295,7 +323,7 @@ function renderBoards() {
       );
     }
     grid.append(
-      element("article", { className: "board-card" }, [title, description, meta, actions]),
+      element("article", { className: "board-card" }, [title, description, actions]),
     );
   }
 }
@@ -304,6 +332,9 @@ async function openBoard(boardId) {
   state.currentBoardId = boardId;
   resetFilters();
   syncFilterInputs();
+  setFiltersPanelOpen(localStorage.getItem("kanban.filters.open") === "1", {
+    persist: false,
+  });
   setHidden("boards-view", true);
   setHidden("board-view", false);
   byId("board-columns").replaceChildren(
@@ -390,6 +421,7 @@ function renderColumns() {
   );
   const filtering = hasActiveFilters();
   byId("drag-filter-note").hidden = !filtering;
+  updateFilterToggle();
   const sortedColumns = [...snapshot.columns].sort((a, b) => a.position - b.position);
   if (!sortedColumns.length) {
     container.append(
@@ -1159,6 +1191,12 @@ function bindEvents() {
     openBoardEditor(state.snapshot.board),
   );
   byId("create-column-button").addEventListener("click", () => openColumnEditor());
+  byId("toggle-filters").addEventListener("click", () => {
+    setFiltersPanelOpen(!filtersPanelOpen);
+  });
+  byId("close-filters").addEventListener("click", () => {
+    setFiltersPanelOpen(false);
+  });
   byId("activity-button").addEventListener("click", showActivity);
   byId("card-archive-button").addEventListener("click", showCardArchive);
   byId("about-button").addEventListener("click", () => openDialog(byId("about-dialog")));

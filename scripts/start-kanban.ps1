@@ -1,7 +1,8 @@
 ﻿param(
     [int]$BackendTimeoutSeconds = 90,
-    [int]$TunnelTimeoutSeconds = 90,
-    [int]$PagesTimeoutSeconds = 300,
+    [int]$TunnelTimeoutSeconds = 180,
+    [int]$PagesTimeoutSeconds = 420,
+    [int]$PushRetryCount = 3,
     [switch]$NoBrowser
 )
 
@@ -48,6 +49,79 @@ function Assert-GitState {
     }
 }
 
+function Ensure-HttpsGitRemote {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$PagesUrl
+    )
+    Push-Location $RepositoryRoot
+    try {
+        $remote = (& git remote get-url origin 2>$null).Trim()
+        if (-not $remote) {
+            throw "В Git-репозитории отсутствует remote origin."
+        }
+        if ($remote.StartsWith("https://", [StringComparison]::OrdinalIgnoreCase)) {
+            return
+        }
+
+        $parsedPages = [Uri]$PagesUrl
+        $owner = $parsedPages.Host.Split(".")[0]
+        $repositoryName = $parsedPages.AbsolutePath.Trim("/").Split("/")[0]
+        if (-not $owner -or -not $repositoryName) {
+            throw "Не удалось определить owner/repository из GITHUB_PAGES_URL: $PagesUrl"
+        }
+        $httpsRemote = "https://github.com/$owner/$repositoryName.git"
+        & git remote set-url origin $httpsRemote
+        if ($LASTEXITCODE -ne 0) {
+            throw "Не удалось переключить origin на HTTPS."
+        }
+        Write-Host "Git remote origin переключён на HTTPS: $httpsRemote"
+    }
+    finally {
+        Pop-Location
+    }
+}
+
+function Push-RuntimeCommit {
+    param(
+        [Parameter(Mandatory = $true)][string]$RepositoryRoot,
+        [Parameter(Mandatory = $true)][string]$RuntimeRelative,
+        [int]$RetryCount = 3
+    )
+    Push-Location $RepositoryRoot
+    try {
+        & git add -- $RuntimeRelative
+        if ($LASTEXITCODE -ne 0) {
+            throw "git add завершился ошибкой."
+        }
+        $staged = @(& git diff --cached --name-only)
+        if ($staged.Count -ne 1 -or $staged[0].Replace("\", "/") -ne $RuntimeRelative) {
+            & git reset -- $RuntimeRelative | Out-Null
+            throw "В Git index присутствуют файлы кроме $RuntimeRelative. Commit отменён."
+        }
+        & git commit -m "chore(runtime): update quick tunnel URL"
+        if ($LASTEXITCODE -ne 0) {
+            throw "git commit завершился ошибкой."
+        }
+
+        for ($attempt = 1; $attempt -le $RetryCount; $attempt += 1) {
+            & git push origin main
+            if ($LASTEXITCODE -eq 0) {
+                return $true
+            }
+            if ($attempt -lt $RetryCount) {
+                $delay = 5 * $attempt
+                Write-Warning "git push не выполнен. Повтор $($attempt + 1) через $delay секунд."
+                Start-Sleep -Seconds $delay
+            }
+        }
+        return $false
+    }
+    finally {
+        Pop-Location
+    }
+}
+
 Assert-CommandAvailable -Name "git" -InstallHint "Установите Git for Windows."
 Assert-CommandAvailable -Name "cloudflared" -InstallHint "Установите cloudflared."
 
@@ -81,7 +155,7 @@ $cloudflareConfigCandidates = @(
 )
 foreach ($candidate in $cloudflareConfigCandidates) {
     if (Test-Path $candidate) {
-        throw "Quick Tunnel не запускается при наличии $candidate. Временно переименуйте этот файл вручную и повторите запуск."
+        throw "Quick Tunnel не запускается при наличии $candidate. Временно переименуйте этот файл и повторите запуск."
     }
 }
 
@@ -92,169 +166,188 @@ else {
     Assert-GitState -RepositoryRoot $repositoryRoot
     Assert-GitState -RepositoryRoot $frontendRepositoryRoot -AllowedRuntimePath $runtimeRelative
 }
+Ensure-HttpsGitRemote -RepositoryRoot $frontendRepositoryRoot -PagesUrl $pagesUrl
 & (Join-Path $PSScriptRoot "stop-kanban.ps1") -Quiet
 
-Push-Location $backendDir
+$startupComplete = $false
 try {
-    & $python -m alembic upgrade head
-    if ($LASTEXITCODE -ne 0) {
-        throw "Не удалось применить миграции."
-    }
-}
-finally {
-    Pop-Location
-}
-
-$backendOut = Join-Path $logDir "backend-stdout.log"
-$backendErr = Join-Path $logDir "backend-stderr.log"
-$backendProcess = Start-Process `
-    -FilePath $python `
-    -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--workers", "1") `
-    -WorkingDirectory $backendDir `
-    -RedirectStandardOutput $backendOut `
-    -RedirectStandardError $backendErr `
-    -WindowStyle Hidden `
-    -PassThru
-Write-Utf8NoBom -Path (Join-Path $runDir "backend.pid") -Content ([string]$backendProcess.Id)
-
-$health = Wait-KanbanJsonEndpoint `
-    -Url "http://127.0.0.1:8000/api/v1/health" `
-    -TimeoutSeconds $BackendTimeoutSeconds
-Write-Host "Backend запущен: PID $($backendProcess.Id), версия $($health.appVersion)."
-
-$tunnelOut = Join-Path $logDir "cloudflared-stdout.log"
-$tunnelErr = Join-Path $logDir "cloudflared-stderr.log"
-Remove-Item -LiteralPath $tunnelOut, $tunnelErr -Force -ErrorAction SilentlyContinue
-$cloudflaredPath = (Get-Command cloudflared).Source
-$tunnelProcess = Start-Process `
-    -FilePath $cloudflaredPath `
-    -ArgumentList @("tunnel", "--edge-ip-version", "4", "--protocol", "http2", "--url", "http://127.0.0.1:8000", "--no-autoupdate", "--loglevel", "info") `
-    -WorkingDirectory $repositoryRoot `
-    -RedirectStandardOutput $tunnelOut `
-    -RedirectStandardError $tunnelErr `
-    -WindowStyle Hidden `
-    -PassThru
-Write-Utf8NoBom -Path (Join-Path $runDir "cloudflared.pid") -Content ([string]$tunnelProcess.Id)
-
-$deadline = (Get-Date).AddSeconds($TunnelTimeoutSeconds)
-$tunnelUrl = $null
-while ((Get-Date) -lt $deadline -and -not $tunnelUrl) {
-    $combined = ""
-    foreach ($path in @($tunnelOut, $tunnelErr)) {
-        if (Test-Path $path) {
-            $combined += Get-Content -LiteralPath $path -Raw -ErrorAction SilentlyContinue
-        }
-    }
-    $match = [Regex]::Match($combined, "https://(?!api\.)[-a-z0-9]+\.trycloudflare\.com")
-    if ($match.Success) {
-        $tunnelUrl = $match.Value
-        break
-    }
-    if ($tunnelProcess.HasExited) {
-        throw "cloudflared завершился до выдачи URL. Проверьте $tunnelErr"
-    }
-    Start-Sleep -Seconds 2
-}
-if (-not $tunnelUrl) {
-    throw "Не удалось получить URL Quick Tunnel за $TunnelTimeoutSeconds секунд. Проверьте $tunnelErr"
-}
-
-# A new Quick Tunnel hostname may need a short DNS warm-up.
-# Waiting before the first lookup avoids caching an early NXDOMAIN response.
-Write-Host "Waiting for Quick Tunnel DNS publication..."
-Start-Sleep -Seconds 15
-Clear-DnsClientCache -ErrorAction SilentlyContinue
-
-$publicHealth = Wait-KanbanJsonEndpoint `
-    -Url "$tunnelUrl/api/v1/health" `
-    -TimeoutSeconds $TunnelTimeoutSeconds
-Write-Host "Quick Tunnel отвечает: $tunnelUrl, API $($publicHealth.apiVersion)."
-
-$runtimePath = if ([IO.Path]::IsPathRooted($runtimeRelative)) {
-    $runtimeRelative
-}
-else {
-    Join-Path $frontendRepositoryRoot $runtimeRelative
-}
-$oldVersion = 0
-if (Test-Path $runtimePath) {
+    Push-Location $backendDir
     try {
-        $oldVersion = [int]((Get-Content -LiteralPath $runtimePath -Raw -Encoding UTF8 | ConvertFrom-Json).configVersion)
-    }
-    catch {
-        $oldVersion = 0
-    }
-}
-$runtimeObject = [ordered]@{
-    apiBaseUrl = "$tunnelUrl/api/v1"
-    generatedAt = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
-    configVersion = $oldVersion + 1
-    appVersion = $health.appVersion
-    apiVersion = $health.apiVersion
-}
-$runtimeJson = $runtimeObject | ConvertTo-Json -Depth 4
-$runtimeTemp = "$runtimePath.tmp"
-Write-Utf8NoBom -Path $runtimeTemp -Content ($runtimeJson + [Environment]::NewLine)
-Move-Item -LiteralPath $runtimeTemp -Destination $runtimePath -Force
-Write-Host "runtime-config.json обновлён: configVersion=$($runtimeObject.configVersion)."
-
-$published = $false
-Push-Location $frontendRepositoryRoot
-try {
-    try {
-        & git add -- $runtimeRelative
-        $staged = @(& git diff --cached --name-only)
-        if ($staged.Count -ne 1 -or $staged[0].Replace("\", "/") -ne $runtimeRelative) {
-            throw "В Git index присутствуют файлы кроме $runtimeRelative. Commit отменён без изменения index."
-        }
-        & git commit -m "chore(runtime): update quick tunnel URL"
+        & $python -m alembic upgrade head
         if ($LASTEXITCODE -ne 0) {
-            throw "git commit завершился ошибкой."
+            throw "Не удалось применить миграции."
         }
-        & git push
-        if ($LASTEXITCODE -ne 0) {
-            throw "git push завершился ошибкой."
-        }
-        $published = $true
     }
-    catch {
-        Write-Warning "Backend и туннель работают, но новый URL не опубликован. GitHub Pages пока использует старую конфигурацию. Причина: $($_.Exception.Message)"
+    finally {
+        Pop-Location
     }
-}
-finally {
-    Pop-Location
-}
 
-if ($published) {
-    $configUrl = $pagesUrl.TrimEnd("/") + "/runtime-config.json"
-    $pagesDeadline = (Get-Date).AddSeconds($PagesTimeoutSeconds)
-    $pagesReady = $false
-    while ((Get-Date) -lt $pagesDeadline) {
-        try {
-            $remoteConfig = Invoke-RestMethod `
-                -Uri ($configUrl + "?ts=" + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) `
-                -Method Get `
-                -TimeoutSec 15 `
-                -Headers @{ "Cache-Control" = "no-cache" }
-            if ([int]$remoteConfig.configVersion -eq [int]$runtimeObject.configVersion) {
-                $pagesReady = $true
-                break
+    $backendOut = Join-Path $logDir "backend-stdout.log"
+    $backendErr = Join-Path $logDir "backend-stderr.log"
+    $backendProcess = Start-Process `
+        -FilePath $python `
+        -ArgumentList @("-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000", "--workers", "1") `
+        -WorkingDirectory $backendDir `
+        -RedirectStandardOutput $backendOut `
+        -RedirectStandardError $backendErr `
+        -WindowStyle Hidden `
+        -PassThru
+    Write-Utf8NoBom -Path (Join-Path $runDir "backend.pid") -Content ([string]$backendProcess.Id)
+
+    $health = Wait-KanbanJsonEndpoint `
+        -Url "http://127.0.0.1:8000/api/v1/health" `
+        -TimeoutSeconds $BackendTimeoutSeconds
+    Write-Host "Backend запущен: PID $($backendProcess.Id), версия $($health.appVersion)."
+
+    $tunnelOut = Join-Path $logDir "cloudflared-stdout.log"
+    $tunnelErr = Join-Path $logDir "cloudflared-stderr.log"
+    Remove-Item -LiteralPath $tunnelOut, $tunnelErr -Force -ErrorAction SilentlyContinue
+    $cloudflaredPath = (Get-Command cloudflared).Source
+    $tunnelProcess = Start-Process `
+        -FilePath $cloudflaredPath `
+        -ArgumentList @(
+            "tunnel",
+            "--edge-ip-version", "4",
+            "--protocol", "http2",
+            "--url", "http://127.0.0.1:8000",
+            "--no-autoupdate",
+            "--loglevel", "info"
+        ) `
+        -WorkingDirectory $repositoryRoot `
+        -RedirectStandardOutput $tunnelOut `
+        -RedirectStandardError $tunnelErr `
+        -WindowStyle Hidden `
+        -PassThru
+    Write-Utf8NoBom -Path (Join-Path $runDir "cloudflared.pid") -Content ([string]$tunnelProcess.Id)
+
+    $deadline = (Get-Date).AddSeconds($TunnelTimeoutSeconds)
+    $tunnelUrl = $null
+    while ((Get-Date) -lt $deadline -and -not $tunnelUrl) {
+        $combined = ""
+        foreach ($path in @($tunnelOut, $tunnelErr)) {
+            if (Test-Path $path) {
+                $combined += Get-Content -LiteralPath $path -Raw -ErrorAction SilentlyContinue
             }
         }
-        catch {
-            # GitHub Pages может быть временно недоступен во время deployment.
+        $match = [Regex]::Match(
+            $combined,
+            "https://(?!api\.)[-a-z0-9]+\.trycloudflare\.com",
+            [Text.RegularExpressions.RegexOptions]::IgnoreCase
+        )
+        if ($match.Success) {
+            $tunnelUrl = $match.Value.ToLowerInvariant()
+            break
         }
-        Start-Sleep -Seconds 10
+        if ($tunnelProcess.HasExited) {
+            throw "cloudflared завершился до выдачи URL. Проверьте $tunnelErr"
+        }
+        Start-Sleep -Seconds 2
     }
-    if ($pagesReady) {
-        Write-Host "GitHub Pages получил configVersion=$($runtimeObject.configVersion): $pagesUrl"
-        if (-not $NoBrowser) {
-            Start-Process $pagesUrl
-        }
+    if (-not $tunnelUrl) {
+        throw "Не удалось получить URL Quick Tunnel за $TunnelTimeoutSeconds секунд. Проверьте $tunnelErr"
+    }
+
+    Write-Host "Ожидание публикации DNS Quick Tunnel..."
+    Start-Sleep -Seconds 10
+    $publicHealth = Wait-KanbanJsonEndpoint `
+        -Url "$tunnelUrl/api/v1/health" `
+        -TimeoutSeconds $TunnelTimeoutSeconds `
+        -IntervalSeconds 3 `
+        -FlushDnsOnFailure
+    Write-Host "Quick Tunnel отвечает: $tunnelUrl, API $($publicHealth.apiVersion)."
+    $startupComplete = $true
+
+    $runtimePath = if ([IO.Path]::IsPathRooted($runtimeRelative)) {
+        $runtimeRelative
     }
     else {
-        Write-Warning "Git push выполнен, но GitHub Pages не опубликовал новую версию за $PagesTimeoutSeconds секунд. Проверьте вкладку Actions."
+        Join-Path $frontendRepositoryRoot $runtimeRelative
     }
-}
+    $oldVersion = 0
+    if (Test-Path $runtimePath) {
+        try {
+            $oldVersion = [int](
+                (Get-Content -LiteralPath $runtimePath -Raw -Encoding UTF8 | ConvertFrom-Json).configVersion
+            )
+        }
+        catch {
+            $oldVersion = 0
+        }
+    }
+    $runtimeObject = [ordered]@{
+        apiBaseUrl = "$tunnelUrl/api/v1"
+        generatedAt = [DateTime]::UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ")
+        configVersion = $oldVersion + 1
+        appVersion = $health.appVersion
+        apiVersion = $health.apiVersion
+    }
+    $runtimeJson = $runtimeObject | ConvertTo-Json -Depth 4
+    $runtimeTemp = "$runtimePath.tmp"
+    Write-Utf8NoBom -Path $runtimeTemp -Content ($runtimeJson + [Environment]::NewLine)
+    Move-Item -LiteralPath $runtimeTemp -Destination $runtimePath -Force
+    Write-Host "runtime-config.json обновлён: configVersion=$($runtimeObject.configVersion)."
 
-Write-Host "Система продолжает работать в фоне. Для остановки: .\scripts\stop-kanban.ps1"
+    $published = $false
+    try {
+        $published = Push-RuntimeCommit `
+            -RepositoryRoot $frontendRepositoryRoot `
+            -RuntimeRelative $runtimeRelative `
+            -RetryCount $PushRetryCount
+    }
+    catch {
+        Write-Warning "Backend и туннель работают, но runtime commit не создан: $($_.Exception.Message)"
+    }
+
+    if (-not $published) {
+        Write-Warning @"
+Backend и туннель работают, но новый URL не опубликован в GitHub Pages.
+Выполните вручную из репозитория: git push origin main
+До успешного push постоянная страница может использовать старый URL.
+"@
+    }
+    else {
+        $configUrl = $pagesUrl.TrimEnd("/") + "/runtime-config.json"
+        $pagesDeadline = (Get-Date).AddSeconds($PagesTimeoutSeconds)
+        $pagesReady = $false
+        while ((Get-Date) -lt $pagesDeadline) {
+            try {
+                $remoteConfig = Invoke-RestMethod `
+                    -Uri ($configUrl + "?ts=" + [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) `
+                    -Method Get `
+                    -TimeoutSec 15 `
+                    -Headers @{ "Cache-Control" = "no-cache" }
+                if ([int]$remoteConfig.configVersion -eq [int]$runtimeObject.configVersion) {
+                    $pagesReady = $true
+                    break
+                }
+            }
+            catch {
+                # GitHub Pages может быть временно недоступен во время deployment.
+            }
+            Start-Sleep -Seconds 10
+        }
+        if ($pagesReady) {
+            Write-Host "GitHub Pages получил configVersion=$($runtimeObject.configVersion): $pagesUrl"
+            if (-not $NoBrowser) {
+                Start-Process $pagesUrl
+            }
+        }
+        else {
+            Write-Warning "Git push выполнен, но GitHub Pages не опубликовал новую версию за $PagesTimeoutSeconds секунд. Проверьте Actions."
+        }
+    }
+
+    Write-Host "Система продолжает работать в фоне. Для остановки: .\scripts\stop-kanban.ps1"
+    $global:LASTEXITCODE = 0
+}
+catch {
+    if (-not $startupComplete) {
+        try {
+            & (Join-Path $PSScriptRoot "stop-kanban.ps1") -Quiet
+        }
+        catch {
+            # Не скрываем исходную ошибку запуска.
+        }
+    }
+    throw
+}

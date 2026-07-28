@@ -16,7 +16,9 @@ async def login(client: httpx.AsyncClient, username: str, password: str) -> str:
     return response.json()["access_token"]
 
 
-async def read_loop(client: httpx.AsyncClient, token: str, board_id: str, iterations: int) -> None:
+async def read_loop(
+    client: httpx.AsyncClient, token: str, board_id: str, iterations: int
+) -> None:
     headers = {"Authorization": f"Bearer {token}"}
     for index in range(iterations):
         response = await client.get(f"/boards/{board_id}/revision", headers=headers)
@@ -78,7 +80,8 @@ async def mutation_loop(
 async def run(args: argparse.Namespace) -> None:
     timeout = httpx.Timeout(20)
     async with httpx.AsyncClient(
-        base_url=args.base_url.rstrip("/") + "/api/v1", timeout=timeout
+        base_url=args.base_url.rstrip("/") + "/api/v1",
+        timeout=timeout,
     ) as client:
         credentials = [
             (f"{args.username_prefix}{number:02d}", args.password)
@@ -98,7 +101,9 @@ async def run(args: argparse.Namespace) -> None:
         source_column_id = columns[0]["id"]
         target_column_id = columns[1]["id"]
         run_id = uuid4().hex[:8]
-        readers = [read_loop(client, token, args.board_id, args.iterations) for token in tokens]
+        readers = [
+            read_loop(client, token, args.board_id, args.iterations) for token in tokens
+        ]
         writers = [
             mutation_loop(
                 client,
@@ -132,7 +137,9 @@ async def run(args: argparse.Namespace) -> None:
                 if not card["archived_at"] and card["column_id"] == column["id"]
             )
             if positions != list(range(len(positions))):
-                raise RuntimeError(f"Нарушены позиции в колонке {column['id']}: {positions}")
+                raise RuntimeError(
+                    f"Нарушены позиции в колонке {column['id']}: {positions}"
+                )
 
 
 def main() -> int:

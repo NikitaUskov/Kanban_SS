@@ -89,7 +89,9 @@ def refresh(db: Session, raw_refresh_token: str) -> TokenPair:
     digest = hash_token(raw_refresh_token)
     with write_coordinator.write():
         try:
-            record = db.scalar(select(RefreshToken).where(RefreshToken.token_hash == digest))
+            record = db.scalar(
+                select(RefreshToken).where(RefreshToken.token_hash == digest)
+            )
             if record is None or record.revoked_at is not None:
                 raise AppError(401, "REFRESH_REVOKED", "Refresh token отозван или не найден")
             if as_utc(record.expires_at) <= utcnow():
@@ -133,7 +135,9 @@ def logout(db: Session, raw_refresh_token: str) -> None:
             raise
 
 
-def change_password(db: Session, user: User, current_password: str, new_password: str) -> None:
+def change_password(
+    db: Session, user: User, current_password: str, new_password: str
+) -> None:
     """Change the password and revoke all existing refresh sessions."""
 
     if not verify_password(current_password, user.password_hash):
@@ -156,3 +160,4 @@ def change_password(db: Session, user: User, current_password: str, new_password
         except Exception:
             db.rollback()
             raise
+

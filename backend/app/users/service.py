@@ -79,7 +79,9 @@ def create_users_batch(db: Session, items: list[NewUser]) -> list[User]:
         )
     with write_coordinator.write():
         try:
-            existing = set(db.scalars(select(User.username).where(User.username.in_(names))).all())
+            existing = set(
+                db.scalars(select(User.username).where(User.username.in_(names))).all()
+            )
             if existing:
                 raise AppError(
                     409,
@@ -163,3 +165,4 @@ def reset_password(db: Session, username: str, new_password: str) -> User:
 
 def list_users(db: Session) -> list[User]:
     return list(db.scalars(select(User).order_by(User.username)).all())
+

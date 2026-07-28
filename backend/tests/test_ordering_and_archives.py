@@ -116,7 +116,9 @@ def test_archive_and_restore_card(client, board, owner_headers):
     assert restored.json()["column_id"] == restore_column["id"]
 
 
-def test_client_request_id_cannot_be_reused_for_another_action(client, board, owner_headers):
+def test_client_request_id_cannot_be_reused_for_another_action(
+    client, board, owner_headers
+):
     request_id = str(uuid4())
     created = client.post(
         f"/api/v1/boards/{board['id']}/columns",
@@ -140,7 +142,9 @@ def test_client_request_id_cannot_be_reused_for_another_action(client, board, ow
     assert reused.json()["error"]["code"] == "CLIENT_REQUEST_ID_REUSED"
 
 
-def test_nonempty_column_can_move_cards_before_delete(client, board, owner_headers):
+def test_nonempty_column_can_move_cards_before_delete(
+    client, board, owner_headers
+):
     initial = get_snapshot(client, board["id"], owner_headers)
     source, target = initial["columns"][:2]
     card = create_card(client, board["id"], source["id"], owner_headers, "Переносимая")
@@ -160,4 +164,6 @@ def test_nonempty_column_can_move_cards_before_delete(client, board, owner_heade
     final = get_snapshot(client, board["id"], owner_headers)
     moved = next(item for item in final["cards"] if item["id"] == card["id"])
     assert moved["column_id"] == target["id"]
-    assert [item["position"] for item in final["columns"]] == list(range(len(final["columns"])))
+    assert [item["position"] for item in final["columns"]] == list(
+        range(len(final["columns"]))
+    )

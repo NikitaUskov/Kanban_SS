@@ -111,7 +111,9 @@ def main() -> int:
                 print(f"Создано пользователей: {len(users)}")
     except (AppError, ValueError, OSError) as exc:
         logger.error(
-            "admin_action_failed command=%s error_type=%s", args.command, type(exc).__name__
+            "admin_action_failed command=%s error_type=%s",
+            args.command,
+            type(exc).__name__,
         )
         print(f"Ошибка: {exc}", file=sys.stderr)
         return 1
@@ -120,3 +122,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

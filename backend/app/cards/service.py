@@ -71,7 +71,9 @@ def get_card(db: Session, card_id: str) -> CardResponse:
     return _response(db, card_id)
 
 
-def create_card(db: Session, board_id: str, payload: CardCreate, actor: User) -> CardResponse:
+def create_card(
+    db: Session, board_id: str, payload: CardCreate, actor: User
+) -> CardResponse:
     request_id = str(payload.client_request_id) if payload.client_request_id else None
     with write_coordinator.write():
         try:
@@ -128,7 +130,9 @@ def create_card(db: Session, board_id: str, payload: CardCreate, actor: User) ->
             raise
 
 
-def update_card(db: Session, card_id: str, payload: CardUpdate, actor: User) -> CardResponse:
+def update_card(
+    db: Session, card_id: str, payload: CardUpdate, actor: User
+) -> CardResponse:
     request_id = str(payload.client_request_id) if payload.client_request_id else None
     with write_coordinator.write():
         try:
@@ -203,7 +207,9 @@ def move_card(db: Session, card_id: str, payload: CardMove, actor: User) -> Card
             now = utcnow()
             if target.id == source_column_id:
                 ordered = [
-                    item for item in _cards_in_column(db, source_column_id) if item.id != card.id
+                    item
+                    for item in _cards_in_column(db, source_column_id)
+                    if item.id != card.id
                 ]
                 target_index = min(payload.target_index, len(ordered))
                 ordered.insert(target_index, card)
@@ -276,7 +282,9 @@ def archive_card(
             card.updated_by_user_id = actor.id
             card.updated_at = now
             remaining = [
-                item for item in _cards_in_column(db, card.column_id) if item.id != card.id
+                item
+                for item in _cards_in_column(db, card.column_id)
+                if item.id != card.id
             ]
             for position, item in enumerate(remaining):
                 if item.position != position:
@@ -301,7 +309,9 @@ def archive_card(
             raise
 
 
-def restore_card(db: Session, card_id: str, payload: CardRestore, actor: User) -> CardResponse:
+def restore_card(
+    db: Session, card_id: str, payload: CardRestore, actor: User
+) -> CardResponse:
     request_id = str(payload.client_request_id) if payload.client_request_id else None
     with write_coordinator.write():
         try:
@@ -314,7 +324,9 @@ def restore_card(db: Session, card_id: str, payload: CardRestore, actor: User) -
             board = require_board(db, card.board_id)
             _assert_card_version(card, payload.expected_version)
             target_id = (
-                str(payload.target_column_id) if payload.target_column_id else card.column_id
+                str(payload.target_column_id)
+                if payload.target_column_id
+                else card.column_id
             )
             target = require_column(db, target_id)
             if target.board_id != board.id:
@@ -325,10 +337,8 @@ def restore_card(db: Session, card_id: str, payload: CardRestore, actor: User) -
                 )
             ensure_wip_capacity(db, target)
             target_cards = _cards_in_column(db, target.id)
-            index = (
-                len(target_cards)
-                if payload.target_index is None
-                else min(payload.target_index, len(target_cards))
+            index = len(target_cards) if payload.target_index is None else min(
+                payload.target_index, len(target_cards)
             )
             now = utcnow()
             target_cards.insert(index, card)
@@ -358,3 +368,4 @@ def restore_card(db: Session, card_id: str, payload: CardRestore, actor: User) -
         except Exception:
             db.rollback()
             raise
+

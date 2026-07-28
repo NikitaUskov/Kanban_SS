@@ -204,7 +204,7 @@ Authorization: Bearer <access_token>
 ```json
 {
   "status": "ok",
-  "appVersion": "1.0.0",
+  "appVersion": "1.1.0",
   "apiVersion": "v1",
   "database": "ok",
   "time": "2026-07-27T12:00:00Z"

@@ -72,7 +72,7 @@ try {
     finally {
         Pop-Location
     }
-    & (Join-Path $PSScriptRoot "start-kanban.ps1") -NoBrowser:$NoBrowser
+    & (Join-Path $PSScriptRoot "start-kanban-server.ps1") -NoBrowser:$NoBrowser
     $ready = Wait-KanbanJsonEndpoint -Url "http://127.0.0.1:8000/api/v1/ready" -TimeoutSeconds 90
     Write-Host "Обновление до $VersionTag завершено. Alembic revision: $($ready.alembicRevision)."
 }

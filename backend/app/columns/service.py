@@ -19,7 +19,9 @@ from app.models import Board, Card, Column, User
 from app.timeutils import utcnow
 
 
-def require_column(db: Session, column_id: str, *, allow_archived: bool = False) -> Column:
+def require_column(
+    db: Session, column_id: str, *, allow_archived: bool = False
+) -> Column:
     column = db.scalar(select(Column).where(Column.id == column_id))
     if column is None:
         raise AppError(404, "COLUMN_NOT_FOUND", "Колонка не найдена")
@@ -90,7 +92,9 @@ def _response(db: Session, column_id: str) -> ColumnResponse:
     return ColumnResponse.model_validate(require_column(db, column_id, allow_archived=True))
 
 
-def create_column(db: Session, board_id: str, payload: ColumnCreate, actor: User) -> ColumnResponse:
+def create_column(
+    db: Session, board_id: str, payload: ColumnCreate, actor: User
+) -> ColumnResponse:
     request_id = str(payload.client_request_id) if payload.client_request_id else None
     with write_coordinator.write():
         try:
@@ -338,7 +342,9 @@ def delete_column(
             column.archived_at = now
             column.version += 1
             column.updated_at = now
-            remaining = [item for item in _active_columns(db, board.id) if item.id != column.id]
+            remaining = [
+                item for item in _active_columns(db, board.id) if item.id != column.id
+            ]
             for position, item in enumerate(remaining):
                 if item.position != position:
                     item.position = position
@@ -361,3 +367,4 @@ def delete_column(
         except Exception:
             db.rollback()
             raise
+

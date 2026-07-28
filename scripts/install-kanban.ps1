@@ -2,7 +2,8 @@
     [string]$InstallRoot = "C:\Kanban",
     [string]$GitHubOwner = "",
     [string]$RepositoryName = "",
-    [switch]$InstallPrerequisites
+    [switch]$InstallPrerequisites,
+    [bool]$ConfigureHttpsRemote = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,6 +39,19 @@ function Set-EnvValue {
     return $Text.TrimEnd() + [Environment]::NewLine + "$Key=$Value" + [Environment]::NewLine
 }
 
+function Get-EnvValueFromText {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string]$Key
+    )
+    $pattern = "(?m)^" + [Regex]::Escape($Key) + "=(.*)$"
+    $match = [Regex]::Match($Text, $pattern)
+    if ($match.Success) {
+        return $match.Groups[1].Value.Trim()
+    }
+    return ""
+}
+
 if ($InstallPrerequisites) {
     Install-MissingPrograms
     exit 0
@@ -65,7 +79,10 @@ if ($GitHubOwner -notmatch "^[A-Za-z0-9-]+$" -or $RepositoryName -notmatch "^[A-
     throw "GitHubOwner или RepositoryName имеют недопустимый формат."
 }
 
-$githubPagesHostOwner = $GitHubOwner.ToLowerInvariant()
+$ownerLower = $GitHubOwner.ToLowerInvariant()
+$pagesOrigin = "https://$ownerLower.github.io"
+$pagesUrl = "$pagesOrigin/$RepositoryName/"
+$httpsRemote = "https://github.com/$GitHubOwner/$RepositoryName.git"
 
 $dataDir = Join-Path $InstallRoot "data"
 $logDir = Join-Path $InstallRoot "logs"
@@ -108,29 +125,78 @@ if ($LASTEXITCODE -ne 0) {
 
 $envExample = Join-Path $backendDir ".env.example"
 $envPath = Join-Path $backendDir ".env"
-if (-not (Test-Path $envPath)) {
+$envCreated = -not (Test-Path $envPath)
+if ($envCreated) {
     $envText = Get-Content -LiteralPath $envExample -Raw -Encoding UTF8
     $secretBytes = New-Object byte[] 64
     $randomGenerator = [Security.Cryptography.RandomNumberGenerator]::Create()
     $randomGenerator.GetBytes($secretBytes)
     $randomGenerator.Dispose()
     $jwtSecret = [Convert]::ToBase64String($secretBytes)
-    $normalizedInstall = $InstallRoot.Replace("\", "/").TrimEnd("/")
-    $normalizedRepository = $repositoryRoot.Replace("\", "/")
     $envText = Set-EnvValue -Text $envText -Key "JWT_SECRET" -Value $jwtSecret
-    $envText = Set-EnvValue -Text $envText -Key "DATABASE_URL" -Value "sqlite:///$normalizedInstall/data/kanban.db"
-    $envText = Set-EnvValue -Text $envText -Key "LOG_DIR" -Value "$normalizedInstall/logs"
-    $envText = Set-EnvValue -Text $envText -Key "RUN_DIR" -Value "$normalizedInstall/run"
-    $envText = Set-EnvValue -Text $envText -Key "BACKUP_DIR" -Value "$normalizedInstall/backups"
-    $envText = Set-EnvValue -Text $envText -Key "ALLOWED_ORIGINS" -Value "https://$githubPagesHostOwner.github.io,http://127.0.0.1:5500,http://localhost:5500"
-    $envText = Set-EnvValue -Text $envText -Key "GITHUB_PAGES_URL" -Value "https://$githubPagesHostOwner.github.io/$RepositoryName/"
-    $envText = Set-EnvValue -Text $envText -Key "REPOSITORY_PATH" -Value $normalizedRepository
-    $envText = Set-EnvValue -Text $envText -Key "FRONTEND_REPOSITORY_PATH" -Value $normalizedRepository
-    Write-Utf8NoBom -Path $envPath -Content $envText
+}
+else {
+    $envText = Get-Content -LiteralPath $envPath -Raw -Encoding UTF8
+}
+
+$normalizedInstall = $InstallRoot.Replace("\", "/").TrimEnd("/")
+$normalizedRepository = $repositoryRoot.Replace("\", "/")
+$currentOrigins = Get-EnvValueFromText -Text $envText -Key "ALLOWED_ORIGINS"
+$origins = New-Object 'System.Collections.Generic.List[string]'
+foreach ($origin in ($currentOrigins -split ",")) {
+    $normalized = $origin.Trim().TrimEnd("/")
+    if ($normalized -and -not $origins.Contains($normalized)) {
+        $origins.Add($normalized)
+    }
+}
+foreach ($requiredOrigin in @($pagesOrigin, "http://127.0.0.1:5500", "http://localhost:5500")) {
+    if (-not $origins.Contains($requiredOrigin)) {
+        $origins.Add($requiredOrigin)
+    }
+}
+
+$envText = Set-EnvValue -Text $envText -Key "APP_VERSION" -Value "1.1.0"
+$envText = Set-EnvValue -Text $envText -Key "DATABASE_URL" -Value "sqlite:///$normalizedInstall/data/kanban.db"
+$envText = Set-EnvValue -Text $envText -Key "LOG_DIR" -Value "$normalizedInstall/logs"
+$envText = Set-EnvValue -Text $envText -Key "RUN_DIR" -Value "$normalizedInstall/run"
+$envText = Set-EnvValue -Text $envText -Key "BACKUP_DIR" -Value "$normalizedInstall/backups"
+$envText = Set-EnvValue -Text $envText -Key "ALLOWED_ORIGINS" -Value ($origins -join ",")
+$envText = Set-EnvValue -Text $envText -Key "GITHUB_PAGES_URL" -Value $pagesUrl
+$envText = Set-EnvValue -Text $envText -Key "REPOSITORY_PATH" -Value $normalizedRepository
+$envText = Set-EnvValue -Text $envText -Key "FRONTEND_REPOSITORY_PATH" -Value $normalizedRepository
+$envText = Set-EnvValue -Text $envText -Key "RUNTIME_CONFIG_PATH" -Value "frontend/runtime-config.json"
+Write-Utf8NoBom -Path $envPath -Content $envText
+if ($envCreated) {
     Write-Host "Создан backend\.env; JWT_SECRET сгенерирован локально и не выводился."
 }
 else {
-    Write-Host "backend\.env уже существует и не изменён."
+    Write-Host "backend\.env сохранён; публичные URL и пути приведены к текущей установке."
+}
+
+if ($ConfigureHttpsRemote) {
+    Push-Location $repositoryRoot
+    try {
+        $inside = (& git rev-parse --is-inside-work-tree 2>$null).Trim()
+        if ($inside -eq "true") {
+            $originExists = @(& git remote) -contains "origin"
+            if ($originExists) {
+                & git remote set-url origin $httpsRemote
+            }
+            else {
+                & git remote add origin $httpsRemote
+            }
+            if ($LASTEXITCODE -ne 0) {
+                throw "Не удалось настроить Git remote origin."
+            }
+            Write-Host "Git remote origin использует HTTPS: $httpsRemote"
+        }
+        else {
+            Write-Warning "Каталог не является Git-репозиторием. Автопубликация runtime-config потребует клонирования репозитория через Git."
+        }
+    }
+    finally {
+        Pop-Location
+    }
 }
 
 Push-Location $backendDir
@@ -153,4 +219,4 @@ Write-Host "Установка завершена."
 Write-Host "Следующий шаг - создать пользователя:"
 Write-Host "  cd `"$backendDir`""
 Write-Host "  .\.venv\Scripts\python.exe -m scripts.manage_users create <username> --display-name `"<Имя>`""
-Write-Host "После создания пользователей запустите: .\scripts\start-kanban.ps1"
+Write-Host "После создания пользователей запустите от администратора: .\scripts\start-kanban-server.ps1"

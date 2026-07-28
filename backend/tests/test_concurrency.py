@@ -7,3 +7,4 @@ def test_write_coordinator_is_reentrant():
     coordinator = WriteCoordinator()
     with coordinator.write(), coordinator.write():
         assert True
+

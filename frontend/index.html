@@ -91,7 +91,16 @@
               <h1 id="board-title"></h1>
               <p id="board-description" class="muted"></p>
             </div>
-            <div class="button-row">
+            <div class="button-row board-actions">
+              <button
+                id="toggle-filters"
+                class="button button--secondary filter-toggle"
+                type="button"
+                aria-expanded="false"
+                aria-controls="filters-panel"
+              >
+                Фильтры
+              </button>
               <button id="activity-button" class="button button--secondary" type="button">
                 Журнал
               </button>
@@ -107,46 +116,67 @@
             </div>
           </div>
 
-          <div class="filters" aria-label="Фильтры карточек">
-            <label class="filter-search">
-              <span>Поиск</span>
-              <input id="filter-query" type="search" placeholder="Название или описание">
-            </label>
-            <label>
-              <span>Приоритет</span>
-              <select id="filter-priority">
-                <option value="">Все</option>
-                <option value="low">Низкий</option>
-                <option value="normal">Обычный</option>
-                <option value="high">Высокий</option>
-                <option value="critical">Критический</option>
-              </select>
-            </label>
-            <label>
-              <span>Колонка</span>
-              <select id="filter-column"><option value="">Все</option></select>
-            </label>
-            <label>
-              <span>Срок</span>
-              <select id="filter-due">
-                <option value="">Все</option>
-                <option value="with">Со сроком</option>
-                <option value="without">Без срока</option>
-                <option value="overdue">Просроченные</option>
-              </select>
-            </label>
-            <label>
-              <span>Последнее изменение</span>
-              <select id="filter-user"><option value="">Все пользователи</option></select>
-            </label>
-            <button id="clear-filters" class="button button--ghost filter-reset" type="button">
-              Сбросить
-            </button>
+          <div id="board-workspace" class="board-workspace">
+            <aside id="filters-panel" class="filters-panel" aria-label="Фильтры карточек" hidden>
+              <div class="filters-panel__heading">
+                <div>
+                  <p class="eyebrow">Отбор карточек</p>
+                  <h2>Фильтры</h2>
+                </div>
+                <button
+                  id="close-filters"
+                  class="icon-button"
+                  type="button"
+                  aria-label="Закрыть фильтры"
+                >
+                  ×
+                </button>
+              </div>
+              <div class="filters">
+                <label class="filter-search">
+                  <span>Поиск</span>
+                  <input id="filter-query" type="search" placeholder="Название или описание">
+                </label>
+                <label>
+                  <span>Приоритет</span>
+                  <select id="filter-priority">
+                    <option value="">Все</option>
+                    <option value="low">Низкий</option>
+                    <option value="normal">Обычный</option>
+                    <option value="high">Высокий</option>
+                    <option value="critical">Критический</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Колонка</span>
+                  <select id="filter-column"><option value="">Все</option></select>
+                </label>
+                <label>
+                  <span>Срок</span>
+                  <select id="filter-due">
+                    <option value="">Все</option>
+                    <option value="with">Со сроком</option>
+                    <option value="without">Без срока</option>
+                    <option value="overdue">Просроченные</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Последнее изменение</span>
+                  <select id="filter-user"><option value="">Все пользователи</option></select>
+                </label>
+                <button id="clear-filters" class="button button--ghost filter-reset" type="button">
+                  Сбросить фильтры
+                </button>
+              </div>
+            </aside>
+
+            <div class="board-canvas">
+              <p id="drag-filter-note" class="notice" hidden>
+                Перетаскивание отключено, пока действует фильтр.
+              </p>
+              <div id="board-columns" class="board-columns" aria-live="polite"></div>
+            </div>
           </div>
-          <p id="drag-filter-note" class="notice" hidden>
-            Перетаскивание отключено, пока действует фильтр.
-          </p>
-          <div id="board-columns" class="board-columns" aria-live="polite"></div>
         </section>
       </main>
     </div>

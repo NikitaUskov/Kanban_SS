@@ -50,11 +50,14 @@ function Wait-KanbanJsonEndpoint {
     param(
         [Parameter(Mandatory = $true)][string]$Url,
         [int]$TimeoutSeconds = 60,
-        [int]$IntervalSeconds = 2
+        [int]$IntervalSeconds = 2,
+        [switch]$FlushDnsOnFailure
     )
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     $lastError = $null
+    $attempt = 0
     while ((Get-Date) -lt $deadline) {
+        $attempt += 1
         try {
             return Invoke-RestMethod -Uri $Url -Method Get -TimeoutSec 10 -Headers @{
                 "Cache-Control" = "no-cache"
@@ -62,10 +65,23 @@ function Wait-KanbanJsonEndpoint {
         }
         catch {
             $lastError = $_.Exception.Message
+            if ($FlushDnsOnFailure -and ($attempt % 3 -eq 0)) {
+                try {
+                    ipconfig /flushdns | Out-Null
+                }
+                catch {
+                    # Очистка DNS-кэша является вспомогательной операцией.
+                }
+            }
             Start-Sleep -Seconds $IntervalSeconds
         }
     }
     throw "URL не ответил за $TimeoutSeconds секунд: $Url. Последняя ошибка: $lastError"
+}
+
+function Get-KanbanProcessInfo {
+    param([Parameter(Mandatory = $true)][int]$ProcessId)
+    return Get-CimInstance Win32_Process -Filter "ProcessId = $ProcessId" -ErrorAction SilentlyContinue
 }
 
 function Stop-KanbanPidProcess {
@@ -79,24 +95,32 @@ function Stop-KanbanPidProcess {
         if (-not $Quiet) {
             Write-Host "${Label}: PID-файл отсутствует, пропуск."
         }
-        return
+        return $false
     }
+
     $rawPid = (Get-Content -LiteralPath $PidFile -Raw).Trim()
     $processId = 0
     if (-not [int]::TryParse($rawPid, [ref]$processId)) {
-        throw "Некорректный PID-файл: $PidFile"
+        Remove-Item -LiteralPath $PidFile -Force -ErrorAction SilentlyContinue
+        Write-Warning "Некорректный PID-файл удалён: $PidFile"
+        return $false
     }
-    $processInfo = Get-CimInstance Win32_Process -Filter "ProcessId = $processId" -ErrorAction SilentlyContinue
+
+    $processInfo = Get-KanbanProcessInfo -ProcessId $processId
     if ($null -eq $processInfo) {
         Remove-Item -LiteralPath $PidFile -Force
         if (-not $Quiet) {
-            Write-Host "${Label}: процесс уже завершён."
+            Write-Host "${Label}: процесс уже завершён, старый PID-файл удалён."
         }
-        return
+        return $false
     }
+
     if (-not $processInfo.CommandLine -or -not $processInfo.CommandLine.Contains($ExpectedCommandFragment)) {
-        throw "PID $processId принадлежит другому процессу. PID-файл не использован: $PidFile"
+        Remove-Item -LiteralPath $PidFile -Force -ErrorAction SilentlyContinue
+        Write-Warning "${Label}: PID $processId уже принадлежит другому процессу. Старый PID-файл удалён; чужой процесс не остановлен."
+        return $false
     }
+
     Stop-Process -Id $processId -ErrorAction Stop
     try {
         Wait-Process -Id $processId -Timeout 8 -ErrorAction Stop
@@ -104,9 +128,30 @@ function Stop-KanbanPidProcess {
     catch {
         Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
     }
-    Remove-Item -LiteralPath $PidFile -Force
+    Remove-Item -LiteralPath $PidFile -Force -ErrorAction SilentlyContinue
     if (-not $Quiet) {
-        Write-Host "$Label остановлен."
+        Write-Host "${Label}: остановлен."
     }
+    return $true
 }
 
+function Stop-KanbanOrphanProcesses {
+    param(
+        [Parameter(Mandatory = $true)][string]$CommandFragment,
+        [Parameter(Mandatory = $true)][string]$Label,
+        [switch]$Quiet
+    )
+    $matches = @(
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.CommandLine -and $_.CommandLine.Contains($CommandFragment)
+            }
+    )
+    foreach ($processInfo in $matches) {
+        Stop-Process -Id $processInfo.ProcessId -Force -ErrorAction SilentlyContinue
+        if (-not $Quiet) {
+            Write-Host "${Label}: остановлен найденный процесс PID $($processInfo.ProcessId)."
+        }
+    }
+    return $matches.Count
+}

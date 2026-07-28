@@ -199,7 +199,6 @@ cd D:\Kanban\repository
 .\scripts\stop-kanban.ps1
 .\scripts\restore-kanban.ps1 `
   -BackupPath "D:\Kanban\incoming-backup\kanban_YYYY-MM-DD_HH-mm-ss.db"
-.\scripts\start-kanban-server.ps1
 ```
 
 Одновременно держать старый и новый сервер запущенными нельзя: оба будут публиковать разные

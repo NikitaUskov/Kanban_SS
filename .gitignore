@@ -1,11 +1,18 @@
-
-# Python runtime
+# Python
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 backend/.venv/
+backend/test-logs/
+
 # Local configuration and secrets
 backend/.env
 .env
+*.secret
+
 # Runtime data
 data/
 logs/
@@ -14,9 +21,19 @@ run/
 *.db
 *.db-shm
 *.db-wal
+*.sqlite
+*.sqlite3
+cloudflared*.log
 
-# Test logs
-backend/test-logs/
-
-# PyCharm
+# Editors and OS
 .idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+

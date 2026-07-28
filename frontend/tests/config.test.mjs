@@ -8,7 +8,7 @@ test("runtime config accepts HTTPS API v1", () => {
     apiBaseUrl: "https://sample.trycloudflare.com/api/v1",
     generatedAt: "2026-07-27T12:00:00Z",
     configVersion: 5,
-    appVersion: "1.0.0",
+    appVersion: "1.1.0",
     apiVersion: "v1",
   });
   assert.equal(value.configVersion, 5);

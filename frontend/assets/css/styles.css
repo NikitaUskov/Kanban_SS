@@ -875,3 +875,392 @@ textarea {
   }
 }
 
+
+/* Responsive layout refinements introduced in 1.1.0. */
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  overflow-x: hidden;
+  line-height: 1.5;
+}
+
+h1 {
+  font-size: clamp(1.75rem, 1.38rem + 1.3vw, 2.35rem);
+  line-height: 1.12;
+}
+
+h2 {
+  font-size: clamp(1.08rem, 1rem + 0.35vw, 1.35rem);
+  line-height: 1.25;
+}
+
+.login-card {
+  width: min(100%, 490px);
+}
+
+.login-card > .muted {
+  max-width: 36ch;
+  font-size: clamp(0.95rem, 0.9rem + 0.2vw, 1.05rem);
+  line-height: 1.55;
+}
+
+.app-header {
+  gap: 18px;
+}
+
+.header-actions {
+  min-width: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.app-main {
+  width: min(100%, 1680px);
+  padding-top: clamp(22px, 3vw, 36px);
+}
+
+.page-heading,
+.board-topbar {
+  gap: 18px;
+}
+
+.board-topbar {
+  margin-bottom: 18px;
+}
+
+.board-heading {
+  min-width: min(100%, 260px);
+}
+
+.board-heading p {
+  max-width: 70ch;
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+}
+
+.board-actions {
+  justify-content: flex-end;
+}
+
+.boards-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+}
+
+.board-card {
+  min-height: 170px;
+  padding: clamp(17px, 2vw, 22px);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+
+.board-card__description {
+  margin-bottom: 0;
+  -webkit-line-clamp: 4;
+}
+
+.board-card__actions {
+  flex-wrap: wrap;
+}
+
+.filter-toggle--active {
+  border-color: rgb(18 88 167 / 45%);
+  color: var(--primary);
+  background: rgb(18 88 167 / 8%);
+}
+
+.board-workspace {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.board-workspace--filters-open {
+  grid-template-columns: 252px minmax(0, 1fr);
+}
+
+.filters-panel {
+  position: sticky;
+  top: 78px;
+  max-height: calc(100vh - 94px);
+  padding: 16px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--surface);
+  box-shadow: 0 3px 13px rgb(15 23 42 / 5%);
+}
+
+.filters-panel__heading {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.filters-panel__heading .eyebrow {
+  margin-bottom: 2px;
+}
+
+.filters-panel__heading h2 {
+  margin: 0;
+}
+
+.filters {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.filters label {
+  min-width: 0;
+  font-size: 0.78rem;
+}
+
+.filters input,
+.filters select,
+.filter-reset {
+  min-height: 42px;
+}
+
+.filter-reset {
+  margin-top: 2px;
+}
+
+.board-canvas {
+  min-width: 0;
+}
+
+.board-canvas .notice {
+  margin-bottom: 10px;
+}
+
+.board-columns {
+  min-width: 0;
+  margin-inline: -2px;
+  padding-top: 2px;
+  scroll-padding-inline: 2px;
+  scroll-snap-type: x proximity;
+  overscroll-behavior-inline: contain;
+}
+
+.kanban-column {
+  width: clamp(270px, 25vw, 320px);
+  min-width: clamp(270px, 25vw, 320px);
+  max-height: calc(100vh - 210px);
+  scroll-snap-align: start;
+}
+
+.kanban-card__title,
+.kanban-card__description,
+.column-title {
+  overflow-wrap: anywhere;
+}
+
+.button,
+input,
+textarea,
+select {
+  line-height: 1.35;
+}
+
+@media (max-width: 1080px) {
+  .board-workspace--filters-open {
+    grid-template-columns: 224px minmax(0, 1fr);
+  }
+
+  .board-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 860px) {
+  .app-header {
+    align-items: flex-start;
+  }
+
+  .header-actions {
+    gap: 6px;
+  }
+
+  .page-heading,
+  .board-topbar {
+    display: grid;
+  }
+
+  .board-topbar > #back-to-boards {
+    width: fit-content;
+  }
+
+  .board-heading {
+    order: initial;
+  }
+
+  .board-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .board-actions .button {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .board-workspace--filters-open {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filters-panel {
+    position: static;
+    max-height: none;
+  }
+
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .filter-search,
+  .filter-reset {
+    grid-column: 1 / -1;
+  }
+
+  .kanban-column {
+    width: min(82vw, 310px);
+    min-width: min(82vw, 310px);
+    max-height: calc(100vh - 285px);
+  }
+}
+
+@media (max-width: 620px) {
+  .connection-banner {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    line-height: 1.35;
+  }
+
+  .login-layout {
+    min-height: 100svh;
+    padding: 10px;
+  }
+
+  .login-card {
+    padding: 24px 18px;
+    border-radius: 16px;
+  }
+
+  .brand-mark {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 16px;
+  }
+
+  .stack {
+    margin-top: 22px;
+    gap: 16px;
+  }
+
+  .app-header {
+    min-height: 58px;
+    padding: 8px 10px;
+    align-items: center;
+  }
+
+  .header-actions {
+    flex-wrap: nowrap;
+  }
+
+  #change-password-button {
+    display: none;
+  }
+
+  .app-main {
+    padding: 18px 10px 28px;
+  }
+
+  .page-heading,
+  .board-topbar {
+    margin-bottom: 18px;
+  }
+
+  .page-heading .button-row,
+  .board-actions {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page-heading .button,
+  .board-actions .button {
+    width: 100%;
+    min-height: 42px;
+    padding-inline: 8px;
+    font-size: 0.82rem;
+  }
+
+  .filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .filter-search,
+  .filter-reset {
+    grid-column: auto;
+  }
+
+  .boards-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .board-card {
+    min-height: 0;
+  }
+
+  .board-columns {
+    gap: 10px;
+  }
+
+  .kanban-column {
+    width: min(88vw, 300px);
+    min-width: min(88vw, 300px);
+    max-height: calc(100svh - 250px);
+  }
+
+  .column-header {
+    padding-inline: 11px;
+  }
+
+  .kanban-card {
+    padding: 12px;
+  }
+
+  .modal {
+    width: min(96vw, 520px);
+    max-height: 94svh;
+  }
+
+  .modal-form {
+    max-height: 94svh;
+    padding: 18px;
+  }
+}
+
+@media (max-width: 390px) {
+  .board-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page-heading .button-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

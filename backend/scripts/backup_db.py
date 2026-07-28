@@ -44,7 +44,9 @@ def verify_database(path: Path) -> dict[str, object]:
         missing = sorted(REQUIRED_TABLES - tables)
         if missing:
             raise RuntimeError(f"Отсутствуют таблицы: {', '.join(missing)}")
-        revision = connection.execute("SELECT version_num FROM alembic_version LIMIT 1").fetchone()
+        revision = connection.execute(
+            "SELECT version_num FROM alembic_version LIMIT 1"
+        ).fetchone()
         revision_value = revision[0] if revision else None
         if revision_value != EXPECTED_ALEMBIC_REVISION:
             raise RuntimeError(
@@ -142,3 +144,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

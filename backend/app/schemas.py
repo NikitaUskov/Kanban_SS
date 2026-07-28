@@ -26,3 +26,4 @@ class RevisionResponse(BaseModel):
 
 class MessageResponse(BaseModel):
     message: str
+

@@ -1,1 +1,2 @@
 """Activity journal domain."""
+
