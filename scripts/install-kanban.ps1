@@ -65,6 +65,8 @@ if ($GitHubOwner -notmatch "^[A-Za-z0-9-]+$" -or $RepositoryName -notmatch "^[A-
     throw "GitHubOwner или RepositoryName имеют недопустимый формат."
 }
 
+$githubPagesHostOwner = $GitHubOwner.ToLowerInvariant()
+
 $dataDir = Join-Path $InstallRoot "data"
 $logDir = Join-Path $InstallRoot "logs"
 $backupDir = Join-Path $InstallRoot "backups"
@@ -120,8 +122,8 @@ if (-not (Test-Path $envPath)) {
     $envText = Set-EnvValue -Text $envText -Key "LOG_DIR" -Value "$normalizedInstall/logs"
     $envText = Set-EnvValue -Text $envText -Key "RUN_DIR" -Value "$normalizedInstall/run"
     $envText = Set-EnvValue -Text $envText -Key "BACKUP_DIR" -Value "$normalizedInstall/backups"
-    $envText = Set-EnvValue -Text $envText -Key "ALLOWED_ORIGINS" -Value "https://$GitHubOwner.github.io,http://127.0.0.1:5500,http://localhost:5500"
-    $envText = Set-EnvValue -Text $envText -Key "GITHUB_PAGES_URL" -Value "https://$GitHubOwner.github.io/$RepositoryName/"
+    $envText = Set-EnvValue -Text $envText -Key "ALLOWED_ORIGINS" -Value "https://$githubPagesHostOwner.github.io,http://127.0.0.1:5500,http://localhost:5500"
+    $envText = Set-EnvValue -Text $envText -Key "GITHUB_PAGES_URL" -Value "https://$githubPagesHostOwner.github.io/$RepositoryName/"
     $envText = Set-EnvValue -Text $envText -Key "REPOSITORY_PATH" -Value $normalizedRepository
     $envText = Set-EnvValue -Text $envText -Key "FRONTEND_REPOSITORY_PATH" -Value $normalizedRepository
     Write-Utf8NoBom -Path $envPath -Content $envText
