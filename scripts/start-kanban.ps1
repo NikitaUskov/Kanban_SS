@@ -128,7 +128,7 @@ Remove-Item -LiteralPath $tunnelOut, $tunnelErr -Force -ErrorAction SilentlyCont
 $cloudflaredPath = (Get-Command cloudflared).Source
 $tunnelProcess = Start-Process `
     -FilePath $cloudflaredPath `
-    -ArgumentList @("tunnel", "--url", "http://127.0.0.1:8000", "--no-autoupdate", "--loglevel", "info") `
+    -ArgumentList @("tunnel", "--edge-ip-version", "4", "--protocol", "http2", "--url", "http://127.0.0.1:8000", "--no-autoupdate", "--loglevel", "info") `
     -WorkingDirectory $repositoryRoot `
     -RedirectStandardOutput $tunnelOut `
     -RedirectStandardError $tunnelErr `
@@ -158,6 +158,12 @@ while ((Get-Date) -lt $deadline -and -not $tunnelUrl) {
 if (-not $tunnelUrl) {
     throw "Не удалось получить URL Quick Tunnel за $TunnelTimeoutSeconds секунд. Проверьте $tunnelErr"
 }
+
+# A new Quick Tunnel hostname may need a short DNS warm-up.
+# Waiting before the first lookup avoids caching an early NXDOMAIN response.
+Write-Host "Waiting for Quick Tunnel DNS publication..."
+Start-Sleep -Seconds 15
+Clear-DnsClientCache -ErrorAction SilentlyContinue
 
 $publicHealth = Wait-KanbanJsonEndpoint `
     -Url "$tunnelUrl/api/v1/health" `
