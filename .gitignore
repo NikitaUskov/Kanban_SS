@@ -17,3 +17,6 @@ run/
 
 # Test logs
 backend/test-logs/
+
+# PyCharm
+.idea/
