@@ -28,4 +28,3 @@ class ActivityItem(ORMModel):
 class ActivityPage(ORMModel):
     items: list[ActivityItem]
     next_before_id: int | None
-

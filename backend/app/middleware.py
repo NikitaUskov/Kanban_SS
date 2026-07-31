@@ -45,6 +45,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             )
             if "response" in locals():
                 response.headers["X-Request-ID"] = request_id
-                response.headers["X-Server-Time"] = __import__("datetime").datetime.now(
-                    __import__("datetime").UTC
-                ).isoformat().replace("+00:00", "Z")
+                response.headers["X-Server-Time"] = (
+                    __import__("datetime")
+                    .datetime.now(__import__("datetime").UTC)
+                    .isoformat()
+                    .replace("+00:00", "Z")
+                )

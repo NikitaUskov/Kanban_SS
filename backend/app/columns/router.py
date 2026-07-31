@@ -60,4 +60,3 @@ def reorder_columns_route(
     board_id: UUID, payload: ColumnOrder, db: DbSession, user: CurrentUser
 ) -> ColumnOrderResponse:
     return reorder_columns(db, str(board_id), payload, user)
-

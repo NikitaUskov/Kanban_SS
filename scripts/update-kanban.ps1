@@ -68,6 +68,10 @@ try {
         if ($LASTEXITCODE -ne 0) {
             throw "Миграции завершились ошибкой."
         }
+        & $python -m alembic check
+        if ($LASTEXITCODE -ne 0) {
+            throw "Модель SQLAlchemy и Alembic migration расходятся."
+        }
     }
     finally {
         Pop-Location

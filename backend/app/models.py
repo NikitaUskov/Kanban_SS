@@ -1,4 +1,4 @@
-"""SQLAlchemy models for users, boards, cards and audit records."""
+"""SQLAlchemy models for users, boards, cards and collaboration records."""
 
 from __future__ import annotations
 
@@ -80,9 +80,7 @@ class Board(Base, TimestampMixin):
     columns: Mapped[list[Column]] = relationship(
         back_populates="board", cascade="all, delete-orphan", order_by="Column.position"
     )
-    cards: Mapped[list[Card]] = relationship(
-        back_populates="board", cascade="all, delete-orphan"
-    )
+    cards: Mapped[list[Card]] = relationship(back_populates="board", cascade="all, delete-orphan")
 
 
 class Column(Base, TimestampMixin):
@@ -120,6 +118,8 @@ class Card(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text)
     priority: Mapped[str] = mapped_column(String(20), default="normal", nullable=False)
     due_date: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    assignee_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"))
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     created_by_user_id: Mapped[str] = mapped_column(
@@ -134,6 +134,29 @@ class Card(Base, TimestampMixin):
     column: Mapped[Column] = relationship(back_populates="cards")
     created_by: Mapped[User] = relationship(foreign_keys=[created_by_user_id])
     updated_by: Mapped[User] = relationship(foreign_keys=[updated_by_user_id])
+    assignee: Mapped[User | None] = relationship(foreign_keys=[assignee_user_id])
+    comments: Mapped[list[CardComment]] = relationship(
+        back_populates="card",
+        cascade="all, delete-orphan",
+        order_by="CardComment.created_at",
+    )
+    checklist_items: Mapped[list[CardChecklistItem]] = relationship(
+        back_populates="card",
+        cascade="all, delete-orphan",
+        order_by="CardChecklistItem.position",
+    )
+
+    @property
+    def comment_count(self) -> int:
+        return sum(item.deleted_at is None for item in self.comments)
+
+    @property
+    def checklist_total(self) -> int:
+        return len(self.checklist_items)
+
+    @property
+    def checklist_completed(self) -> int:
+        return sum(item.is_completed for item in self.checklist_items)
 
     __table_args__ = (
         CheckConstraint("priority IN ('low', 'normal', 'high', 'critical')"),
@@ -146,7 +169,50 @@ class Card(Base, TimestampMixin):
         ),
         Index("ix_cards_due_date", "due_date"),
         Index("ix_cards_priority", "priority"),
+        Index("ix_cards_assignee_user_id", "assignee_user_id"),
+        Index("ix_cards_completed_at", "completed_at"),
     )
+
+
+class CardComment(Base, TimestampMixin):
+    __tablename__ = "card_comments"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    card_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("cards.id", ondelete="CASCADE"), nullable=False
+    )
+    author_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    edited_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    deleted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+
+    card: Mapped[Card] = relationship(back_populates="comments")
+    author: Mapped[User] = relationship(foreign_keys=[author_user_id])
+
+    __table_args__ = (
+        Index("ix_card_comments_card_deleted_created", "card_id", "deleted_at", "created_at"),
+    )
+
+
+class CardChecklistItem(Base, TimestampMixin):
+    __tablename__ = "card_checklist_items"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    card_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("cards.id", ondelete="CASCADE"), nullable=False
+    )
+    text: Mapped[str] = mapped_column(String(500), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    completed_by_user_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("users.id"))
+    completed_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+    card: Mapped[Card] = relationship(back_populates="checklist_items")
+    completed_by: Mapped[User | None] = relationship(foreign_keys=[completed_by_user_id])
+
+    __table_args__ = (Index("ix_card_checklist_card_position", "card_id", "position"),)
 
 
 class ActivityLog(Base):

@@ -7,6 +7,7 @@
 - пользователей и хеши паролей;
 - refresh-сессии;
 - доски, колонки и карточки;
+- ответственных, отметки завершения, комментарии и чек-листы;
 - архивные объекты;
 - журнал действий;
 - текущую Alembic revision.
@@ -27,7 +28,7 @@ Backend останавливать не нужно. Используется SQL
 снимок работающей WAL-базы.
 
 ```powershell
-cd C:\Kanban\repository
+cd D:\Kanban\repository
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\backup-kanban.ps1
 ```
@@ -35,8 +36,8 @@ Set-ExecutionPolicy -Scope Process Bypass
 При успехе будут созданы два файла:
 
 ```text
-C:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.db
-C:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.json
+D:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.db
+D:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.json
 ```
 
 JSON содержит результат `PRAGMA integrity_check`, Alembic revision, размер и количество
@@ -49,7 +50,7 @@ JSON содержит результат `PRAGMA integrity_check`, Alembic revis
 Показать последние копии:
 
 ```powershell
-Get-ChildItem C:\Kanban\backups -Filter "kanban_*.db" |
+Get-ChildItem D:\Kanban\backups -Filter "kanban_*.db" |
   Sort-Object LastWriteTime -Descending |
   Select-Object -First 20 Name,Length,LastWriteTime
 ```
@@ -57,7 +58,7 @@ Get-ChildItem C:\Kanban\backups -Filter "kanban_*.db" |
 Прочитать метаданные выбранной копии:
 
 ```powershell
-Get-Content C:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.json |
+Get-Content D:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.json |
   ConvertFrom-Json |
   Format-List
 ```
@@ -78,7 +79,7 @@ Get-Content C:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.json |
 После успешной ручной проверки:
 
 ```powershell
-cd C:\Kanban\repository
+cd D:\Kanban\repository
 .\scripts\register-autostart.ps1
 ```
 
@@ -109,8 +110,8 @@ Get-ScheduledTaskInfo -TaskName "KanbanBoard-DailyBackup"
 
 ```powershell
 New-Item E:\KanbanBackups -ItemType Directory -Force
-Copy-Item C:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.db E:\KanbanBackups\
-Copy-Item C:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.json E:\KanbanBackups\
+Copy-Item D:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.db E:\KanbanBackups\
+Copy-Item D:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.json E:\KanbanBackups\
 ```
 
 Проверьте наличие и размер:
@@ -127,10 +128,10 @@ Backup содержит прикладные данные и должен быт
 Выберите точный файл `.db`, не metadata `.json`.
 
 ```powershell
-cd C:\Kanban\repository
+cd D:\Kanban\repository
 Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\restore-kanban.ps1 `
-  -BackupPath "C:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.db"
+  -BackupPath "D:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.db"
 ```
 
 Скрипт покажет путь и попросит ввести строго:
@@ -144,7 +145,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 1. проверит выбранный backup;
 2. остановит только процессы Kanban;
 3. создаст проверенную аварийную копию текущей рабочей базы в
-   `C:\Kanban\backups\emergency`;
+   `D:\Kanban\backups\emergency`;
 4. восстановит выбранную копию сначала во временный файл;
 5. ещё раз проверит временную базу;
 6. атомарно заменит рабочую базу;
@@ -158,7 +159,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ```powershell
 .\scripts\restore-kanban.ps1 `
-  -BackupPath "C:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.db" `
+  -BackupPath "D:\Kanban\backups\kanban_YYYY-MM-DD_HH-mm-ss.db" `
   -NoBrowser
 ```
 
@@ -166,7 +167,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8000/api/v1/ready | Format-List
-Get-ChildItem C:\Kanban\backups\emergency |
+Get-ChildItem D:\Kanban\backups\emergency |
   Sort-Object LastWriteTime -Descending |
   Select-Object -First 5 Name,Length,LastWriteTime
 ```
@@ -185,11 +186,11 @@ Get-ChildItem C:\Kanban\backups\emergency |
 ## Восстановление после полной потери компьютера
 
 1. Установите Windows prerequisites по `deployment.md`.
-2. Клонируйте нужную версию кода в `C:\Kanban\repository`.
+2. Клонируйте нужную версию кода в `D:\Kanban\repository`.
 3. Запустите `install-kanban.ps1`: он создаст новую пустую базу и `.env`.
 4. Если доступна защищённая копия старого `.env`, остановите сервис и верните её в
    `backend\.env`, проверив пути.
-5. Скопируйте проверенный backup в `C:\Kanban\backups`.
+5. Скопируйте проверенный backup в `D:\Kanban\backups`.
 6. Выполните `restore-kanban.ps1`.
 7. Проверьте ready, вход, данные и Pages runtime config.
 8. Если старого `.env` нет, пользователям потребуется новый вход. При необходимости
@@ -203,11 +204,11 @@ backend.
 Соберите:
 
 ```powershell
-Get-Content C:\Kanban\logs\backend-stderr.log -Tail 100
-Get-ChildItem C:\Kanban\backups\emergency |
+Get-Content D:\Kanban\logs\backend-stderr.log -Tail 100
+Get-ChildItem D:\Kanban\backups\emergency |
   Sort-Object LastWriteTime -Descending |
   Select-Object -First 10 Name,Length,LastWriteTime
-Get-ChildItem C:\Kanban\data
+Get-ChildItem D:\Kanban\data
 ```
 
 Если ошибка произошла до атомарной замены, рабочая база остаётся прежней. Если замена прошла,

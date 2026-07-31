@@ -1,5 +1,5 @@
 export const EXPECTED_API_VERSION = "v1";
-export const FRONTEND_VERSION = "1.1.0";
+export const FRONTEND_VERSION = "1.2.0";
 
 export function validateRuntimeConfig(value) {
   if (!value || typeof value !== "object") {

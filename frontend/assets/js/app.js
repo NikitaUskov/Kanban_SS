@@ -1,4 +1,5 @@
 import { ApiClient, ApiError } from "./api.js";
+import { CardDrawerController, initials } from "./card-detail.js";
 import {
   EXPECTED_API_VERSION,
   FRONTEND_VERSION,
@@ -50,6 +51,15 @@ const api = new ApiClient(configStore, {
   onUnauthorized: () => showLogin("Сессия завершена. Войдите повторно"),
 });
 
+const cardDrawer = new CardDrawerController({
+  api,
+  state,
+  mutationId,
+  errorText,
+  reloadSnapshot: () => loadSnapshot(),
+  handleMutationError,
+});
+
 function mutationId() {
   return crypto.randomUUID();
 }
@@ -79,6 +89,8 @@ async function handleMutationError(error) {
     "COLUMN_VERSION_CONFLICT",
     "CARD_VERSION_CONFLICT",
     "COLUMN_ORDER_CONFLICT",
+    "COMMENT_VERSION_CONFLICT",
+    "CHECKLIST_VERSION_CONFLICT",
   ]);
   if (error instanceof ApiError && conflictCodes.has(error.code)) {
     showToast(`${error.message}. Загружено актуальное состояние`, "error");
@@ -155,6 +167,7 @@ async function onRuntimeConfigChanged(next) {
 }
 
 function showLogin(message = "", clearTokens = true) {
+  cardDrawer.close();
   if (clearTokens) api.tokens.clear();
   state.user = null;
   state.currentBoardId = null;
@@ -216,6 +229,8 @@ async function enterApplication(user) {
   setHidden("login-view", true);
   setHidden("app-shell", false);
   api.scheduleRefresh();
+  const directory = await api.request("/users?active_only=true");
+  state.users = directory.items;
   showBoardsView();
   await loadBoards();
 }
@@ -226,7 +241,11 @@ function activeFilterCount() {
     state.filters.priority,
     state.filters.columnId,
     state.filters.due,
-    state.filters.updatedBy,
+    state.filters.assigneeId,
+    state.filters.mine,
+    state.filters.withComments,
+    state.filters.withChecklist,
+    state.filters.completed,
   ].filter(Boolean).length;
 }
 
@@ -252,6 +271,7 @@ function setFiltersPanelOpen(open, { persist = true } = {}) {
 }
 
 function showBoardsView() {
+  cardDrawer.close();
   stopPolling();
   state.currentBoardId = null;
   state.snapshot = null;
@@ -366,7 +386,11 @@ function syncFilterInputs() {
   byId("filter-priority").value = state.filters.priority;
   byId("filter-column").value = state.filters.columnId;
   byId("filter-due").value = state.filters.due;
-  byId("filter-user").value = state.filters.updatedBy;
+  byId("filter-assignee").value = state.filters.assigneeId;
+  byId("filter-completed").value = state.filters.completed;
+  byId("filter-mine").checked = state.filters.mine;
+  byId("filter-comments").checked = state.filters.withComments;
+  byId("filter-checklist").checked = state.filters.withChecklist;
 }
 
 function rebuildFilterOptions() {
@@ -381,21 +405,18 @@ function rebuildFilterOptions() {
   }
   columnSelect.value = currentColumn;
 
-  const users = new Map();
-  for (const card of snapshot.cards) {
-    users.set(card.updated_by.id, card.updated_by.display_name);
-  }
-  const userSelect = byId("filter-user");
-  const currentUser = state.filters.updatedBy;
-  userSelect.replaceChildren(
+  const assigneeSelect = byId("filter-assignee");
+  const currentAssignee = state.filters.assigneeId;
+  assigneeSelect.replaceChildren(
     element("option", { text: "Все пользователи", attrs: { value: "" } }),
+    element("option", { text: "Не назначен", attrs: { value: "__none__" } }),
   );
-  for (const [id, name] of [...users.entries()].sort((a, b) =>
-    a[1].localeCompare(b[1], "ru"),
-  )) {
-    userSelect.append(element("option", { text: name, attrs: { value: id } }));
+  for (const user of state.users) {
+    assigneeSelect.append(
+      element("option", { text: user.display_name, attrs: { value: user.id } }),
+    );
   }
-  userSelect.value = currentUser;
+  assigneeSelect.value = currentAssignee;
 }
 
 function renderBoard() {
@@ -405,6 +426,27 @@ function renderBoard() {
   byId("board-description").textContent = snapshot.board.description || "Без описания";
   rebuildFilterOptions();
   syncFilterInputs();
+  renderColumns();
+}
+
+
+function collapsedStorageKey() {
+  return `kanban.collapsedColumns.${state.currentBoardId || "none"}`;
+}
+
+function collapsedColumnIds() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(collapsedStorageKey()) || "[]"));
+  } catch {
+    return new Set();
+  }
+}
+
+function toggleColumnCollapsed(columnId) {
+  const ids = collapsedColumnIds();
+  if (ids.has(columnId)) ids.delete(columnId);
+  else ids.add(columnId);
+  localStorage.setItem(collapsedStorageKey(), JSON.stringify([...ids]));
   renderColumns();
 }
 
@@ -418,10 +460,12 @@ function renderColumns() {
     state.filters,
     snapshot.columns,
     new Date(snapshot.server_time),
+    state.user?.id,
   );
   const filtering = hasActiveFilters();
   byId("drag-filter-note").hidden = !filtering;
   updateFilterToggle();
+  const collapsed = collapsedColumnIds();
   const sortedColumns = [...snapshot.columns].sort((a, b) => a.position - b.position);
   if (!sortedColumns.length) {
     container.append(
@@ -439,16 +483,24 @@ function renderColumns() {
     const cards = filtered
       .filter((card) => card.column_id === column.id)
       .sort((a, b) => a.position - b.position);
+    const isCollapsed = collapsed.has(column.id);
     const header = element("div", {
       className: "column-header",
-      attrs: { draggable: filtering ? "false" : "true" },
+      attrs: { draggable: filtering || isCollapsed ? "false" : "true" },
       dataset: { columnId: column.id },
     });
+    const collapseButton = button(
+      isCollapsed ? "»" : "«",
+      "column-collapse",
+      () => toggleColumnCollapsed(column.id),
+      isCollapsed ? `Развернуть колонку ${column.title}` : `Свернуть колонку ${column.title}`,
+    );
     header.append(
+      collapseButton,
       element("h2", { className: "column-title", text: column.title }),
       element("span", { className: "column-count", text: allCards.length }),
     );
-    if (column.wip_limit) {
+    if (column.wip_limit && !isCollapsed) {
       header.append(
         element("span", {
           className: `wip-badge${allCards.length >= column.wip_limit ? " wip-badge--full" : ""}`,
@@ -457,49 +509,59 @@ function renderColumns() {
         }),
       );
     }
-    header.append(
-      button("•••", "column-menu", () => openColumnEditor(column), "Настройки колонки"),
-    );
-    if (!filtering) {
+    if (!isCollapsed) {
+      header.append(
+        button("•••", "column-menu", () => openColumnEditor(column), "Настройки колонки"),
+      );
+    }
+    if (!filtering && !isCollapsed) {
       header.addEventListener("dragstart", (event) => startColumnDrag(event, column.id));
       header.addEventListener("dragend", finishDrag);
     }
 
-    const list = element("div", {
-      className: "card-list",
-      dataset: { columnId: column.id },
-    });
-    for (const card of cards) list.append(renderCard(card, filtering));
-    list.addEventListener("dragover", (event) => {
-      if (dragContext?.kind !== "card") return;
-      event.preventDefault();
-      list.closest(".kanban-column")?.classList.add("kanban-column--drop");
-    });
-    list.addEventListener("dragleave", () =>
-      list.closest(".kanban-column")?.classList.remove("kanban-column--drop"),
-    );
-    list.addEventListener("drop", (event) => dropCard(event, column.id, list));
-
-    const addButton = button(
-      "Добавить карточку",
-      "button add-card-button",
-      () => openCardEditor(null, column.id),
-      `Добавить карточку в колонку ${column.title}`,
-    );
+    const children = [header];
+    if (!isCollapsed) {
+      const list = element("div", {
+        className: "card-list",
+        dataset: { columnId: column.id },
+      });
+      for (const card of cards) list.append(renderCard(card, filtering));
+      list.addEventListener("dragover", (event) => {
+        if (dragContext?.kind !== "card") return;
+        event.preventDefault();
+        list.closest(".kanban-column")?.classList.add("kanban-column--drop");
+      });
+      list.addEventListener("dragleave", () =>
+        list.closest(".kanban-column")?.classList.remove("kanban-column--drop"),
+      );
+      list.addEventListener("drop", (event) => dropCard(event, column.id, list));
+      children.push(
+        list,
+        button(
+          "Добавить карточку",
+          "button add-card-button",
+          () => openCardEditor(null, column.id),
+          `Добавить карточку в колонку ${column.title}`,
+        ),
+      );
+    }
     const columnNode = element(
       "section",
-      { className: "kanban-column", dataset: { columnId: column.id } },
-      [header, list, addButton],
+      {
+        className: `kanban-column${isCollapsed ? " kanban-column--collapsed" : ""}`,
+        dataset: { columnId: column.id },
+      },
+      children,
     );
     container.append(columnNode);
   }
 }
-
 function renderCard(card, filtering) {
   const snapshot = state.snapshot;
   const overdue = isOverdue(card, snapshot.columns, new Date(snapshot.server_time));
+  const completed = Boolean(card.completed_at);
   const node = element("article", {
-    className: "kanban-card",
+    className: `kanban-card${completed ? " kanban-card--completed" : ""}`,
     attrs: {
       draggable: filtering ? "false" : "true",
       tabindex: "0",
@@ -509,34 +571,60 @@ function renderCard(card, filtering) {
     dataset: { cardId: card.id, priority: card.priority },
   });
   node.append(element("h3", { className: "kanban-card__title", text: card.title }));
-  if (card.description) {
-    node.append(
-      element("p", { className: "kanban-card__description", text: card.description }),
-    );
-  }
-  const meta = element("div", { className: "kanban-card__meta" }, [
-    element("span", {
-      className: "priority-label",
-      text: PRIORITIES[card.priority] || card.priority,
-    }),
-  ]);
+  const indicators = element("div", { className: "kanban-card__indicators" });
   if (card.due_date) {
-    meta.append(
+    indicators.append(
       element("span", {
-        className: `due-label${overdue ? " due-label--overdue" : ""}`,
-        text: `${overdue ? "Просрочено: " : "Срок: "}${formatDateTime(card.due_date)}`,
+        className: `card-indicator due-label${overdue ? " due-label--overdue" : ""}`,
+        text: `${overdue ? "⚠ " : ""}${formatDateTime(card.due_date)}`,
+        title: overdue ? "Срок просрочен" : "Срок выполнения",
       }),
     );
   }
-  meta.append(element("span", { text: `Изменил: ${card.updated_by.display_name}` }));
-  node.append(meta);
+  if (card.checklist_total) {
+    indicators.append(
+      element("span", {
+        className: "card-indicator",
+        text: `☑ ${card.checklist_completed}/${card.checklist_total}`,
+        title: "Прогресс чек-листа",
+      }),
+    );
+  }
+  if (card.comment_count) {
+    indicators.append(
+      element("span", {
+        className: "card-indicator",
+        text: `💬 ${card.comment_count}`,
+        title: "Комментарии",
+      }),
+    );
+  }
+  if (["high", "critical"].includes(card.priority)) {
+    indicators.append(
+      element("span", {
+        className: `priority-chip priority-chip--${card.priority}`,
+        text: PRIORITIES[card.priority],
+      }),
+    );
+  }
+  const footer = element("div", { className: "kanban-card__footer" }, [indicators]);
+  if (card.assignee) {
+    footer.append(
+      element("span", {
+        className: "avatar",
+        text: initials(card.assignee.display_name),
+        title: `Ответственный: ${card.assignee.display_name}`,
+      }),
+    );
+  }
+  node.append(footer);
   node.addEventListener("click", () => {
-    if (!state.dragging) openCardEditor(card);
+    if (!state.dragging) cardDrawer.open(card.id);
   });
   node.addEventListener("keydown", (event) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      openCardEditor(card);
+      cardDrawer.open(card.id);
     }
   });
   if (!filtering) {
@@ -545,7 +633,6 @@ function renderCard(card, filtering) {
   }
   return node;
 }
-
 function startCardDrag(event, cardId) {
   dragContext = { kind: "card", id: cardId };
   state.dragging = true;
@@ -758,23 +845,31 @@ function fillActiveColumnSelect(select, selectedId = "") {
   if (selectedId) select.value = selectedId;
 }
 
-function openCardEditor(card = null, columnId = "") {
+function openCardEditor(_card = null, columnId = "") {
   const dialog = byId("card-dialog");
   byId("card-form").reset();
   clearFormError("card-form-error");
-  byId("card-form-id").value = card?.id || "";
-  byId("card-dialog-title").textContent = card ? "Карточка" : "Новая карточка";
-  fillActiveColumnSelect(byId("card-form-column"), card?.column_id || columnId);
-  byId("card-form-column").disabled = Boolean(card);
-  byId("card-form-title").value = card?.title || "";
-  byId("card-form-description").value = card?.description || "";
-  byId("card-form-priority").value = card?.priority || "normal";
-  byId("card-form-due").value = toDateTimeLocal(card?.due_date);
-  byId("card-danger-zone").hidden = !card;
-  dialog.dataset.version = card?.version || "";
+  byId("card-form-id").value = "";
+  byId("card-dialog-title").textContent = "Новая карточка";
+  fillActiveColumnSelect(byId("card-form-column"), columnId);
+  byId("card-form-column").disabled = false;
+  byId("card-form-title").value = "";
+  byId("card-form-description").value = "";
+  byId("card-form-priority").value = "normal";
+  byId("card-form-due").value = "";
+  const assignee = byId("card-form-assignee");
+  assignee.replaceChildren(
+    element("option", { text: "Не назначен", attrs: { value: "" } }),
+  );
+  for (const user of state.users) {
+    assignee.append(
+      element("option", { text: user.display_name, attrs: { value: user.id } }),
+    );
+  }
+  byId("card-danger-zone").hidden = true;
+  dialog.dataset.version = "";
   openDialog(dialog);
 }
-
 async function submitCardForm(event) {
   event.preventDefault();
   if (event.submitter?.value === "cancel") {
@@ -782,55 +877,33 @@ async function submitCardForm(event) {
     return;
   }
   const form = event.currentTarget;
-  const cardId = byId("card-form-id").value;
   clearFormError("card-form-error");
   setBusy(form, true);
   try {
     const description = byId("card-form-description").value.trim();
     const dueInput = byId("card-form-due").value;
-    const common = {
-      title: byId("card-form-title").value,
-      priority: byId("card-form-priority").value,
-      ...(description ? { description } : { clear_description: true }),
-      ...(dueInput
-        ? { due_date: new Date(dueInput).toISOString() }
-        : { clear_due_date: true }),
-      client_request_id: mutationId(),
-    };
-    if (cardId) {
-      await api.request(`/cards/${cardId}`, {
-        method: "PATCH",
-        body: {
-          ...common,
-          expected_version: Number(byId("card-dialog").dataset.version),
-        },
-      });
-    } else {
-      const { clear_description, clear_due_date, ...createFields } = common;
-      await api.request(`/boards/${state.currentBoardId}/cards`, {
-        method: "POST",
-        body: {
-          ...createFields,
-          description: description || null,
-          due_date: dueInput ? new Date(dueInput).toISOString() : null,
-          column_id: byId("card-form-column").value,
-        },
-      });
-    }
+    const assigneeId = byId("card-form-assignee").value;
+    await api.request(`/boards/${state.currentBoardId}/cards`, {
+      method: "POST",
+      body: {
+        title: byId("card-form-title").value,
+        priority: byId("card-form-priority").value,
+        description: description || null,
+        due_date: dueInput ? new Date(dueInput).toISOString() : null,
+        assignee_user_id: assigneeId || null,
+        column_id: byId("card-form-column").value,
+        client_request_id: mutationId(),
+      },
+    });
     closeDialog(byId("card-dialog"));
     await loadSnapshot();
-    showToast(cardId ? "Карточка сохранена" : "Карточка создана", "success");
+    showToast("Карточка создана", "success");
   } catch (error) {
-    if (error instanceof ApiError && error.code === "NO_CHANGES") {
-      closeDialog(byId("card-dialog"));
-    } else {
-      showFormError("card-form-error", error);
-    }
+    showFormError("card-form-error", error);
   } finally {
     setBusy(form, false);
   }
 }
-
 async function archiveCurrentCard() {
   const cardId = byId("card-form-id").value;
   const card = state.snapshot.cards.find((item) => item.id === cardId);
@@ -1139,12 +1212,19 @@ function updateFilters() {
     priority: byId("filter-priority").value,
     columnId: byId("filter-column").value,
     due: byId("filter-due").value,
-    updatedBy: byId("filter-user").value,
+    assigneeId:
+      byId("filter-assignee").value === "__none__"
+        ? "__none__"
+        : byId("filter-assignee").value,
+    completed: byId("filter-completed").value,
+    mine: byId("filter-mine").checked,
+    withComments: byId("filter-comments").checked,
+    withChecklist: byId("filter-checklist").checked,
   });
   renderColumns();
 }
-
 function bindEvents() {
+  cardDrawer.bind();
   configStore.subscribe(onRuntimeConfigChanged);
   byId("login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1217,7 +1297,11 @@ function bindEvents() {
     "filter-priority",
     "filter-column",
     "filter-due",
-    "filter-user",
+    "filter-assignee",
+    "filter-completed",
+    "filter-mine",
+    "filter-comments",
+    "filter-checklist",
   ]) {
     byId(id).addEventListener(id === "filter-query" ? "input" : "change", updateFilters);
   }

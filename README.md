@@ -1,41 +1,50 @@
-# Kanban Board MVP 1.1.0
+# Kanban Board 1.2.0
 
-Многопользовательская канбан-доска для небольшой команды:
+Многопользовательская канбан-доска для небольшой команды. Интерфейс постоянно размещён на
+GitHub Pages, а FastAPI и SQLite работают на Windows-компьютере-сервере через бесплатный
+Cloudflare Quick Tunnel.
 
-- постоянный адрес интерфейса на GitHub Pages;
-- FastAPI и SQLite на Windows-компьютере-сервере;
-- бесплатный Cloudflare Quick Tunnel;
-- автоматическая публикация нового адреса API;
-- одинаковый доступ активных пользователей ко всем доскам;
-- Argon2id, access token на 12 часов и refresh token на 30 дней;
-- WIP-лимиты, оптимистические версии, журнал действий;
-- резервное копирование, восстановление и автозапуск;
-- адаптивный frontend для компьютеров, планшетов и телефонов.
+Версия приложения: `1.2.0`. Базовый путь API: `/api/v1`.
 
-Версия: `1.1.0`. Базовый API: `/api/v1`.
+## Возможности
 
-## Главное изменение 1.1.0
+- общие доски и колонки для всех активных пользователей;
+- WIP-лимиты, drag-and-drop и оптимистическая блокировка изменений;
+- ответственный за карточку и отдельный признак завершения;
+- сроки, приоритеты и визуальное выделение просроченных задач;
+- комментарии с редактированием и удалением собственных сообщений;
+- упорядочиваемые чек-листы с прогрессом;
+- боковая панель карточки на компьютере и полноэкранная карточка на телефоне;
+- сворачивание колонок с персональным сохранением состояния в браузере;
+- компактные карточки с индикаторами срока, комментариев, чек-листа и ответственного;
+- опциональные фильтры: поиск, приоритет, колонка, срок, ответственный, выполнение,
+  «только мои», комментарии и чек-листы;
+- архив досок и карточек, журнал действий, backup, восстановление и автозапуск;
+- Argon2id, access token на 12 часов и refresh token на 30 дней.
 
-Релиз объединяет исправления, найденные при реальном развёртывании:
+## Что добавлено в 1.2.0
 
-- PowerShell-скрипты совместимы с Windows PowerShell 5.1 и сохранены в UTF-8 with BOM;
-- запуск сервера умеет временно использовать IPv4 для регистрации Quick Tunnel без
-  отключения IPv6;
-- исправлены разбор URL туннеля, ожидание DNS, повторный Git push и устаревшие PID-файлы;
-- Git remote автоматически переводится на HTTPS;
-- исправлены CORS, browser `fetch`, Ruff и Alembic model/migration parity;
-- фильтры доски стали сворачиваемой боковой панелью;
-- карточки списка досок больше не показывают количество колонок и карточек;
-- адаптивная типографика и компоновка улучшены для разных экранов.
+- публичный каталог активных пользователей для назначения ответственного;
+- поля `assignee_user_id` и `completed_at` в карточках;
+- комментарии к карточкам;
+- чек-листы с изменением порядка и отметкой выполнения;
+- новая Alembic-миграция `20260730_0002`;
+- адаптивная боковая панель карточки;
+- сворачиваемые колонки;
+- дополнительные фильтры и компактные индикаторы на доске;
+- 23 backend-тест и 16 frontend-тестов.
 
-## Развёртывание на сервере
+Подзадачи как отдельные связанные карточки, соисполнители, файлы и уведомления не входят в
+этот релиз. Их рационально развивать отдельно, не усложняя миграцию 1.2.0.
 
-Начните с инструкции:
+## Развёртывание на новом компьютере-сервере
 
-- [Развёртывание на Windows-сервере](docs/server-deployment.md)
-- [Инструкция владельца и администратора](docs/admin-guide.md)
+Используйте инструкции:
 
-Основная команда после клонирования репозитория:
+- [развёртывание на Windows-сервере](docs/server-deployment.md);
+- [инструкция владельца и администратора](docs/admin-guide.md).
+
+После клонирования репозитория основная команда выглядит так:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
@@ -50,40 +59,63 @@ cd D:\Kanban\repository
   -RegisterAutostart
 ```
 
-Первый запуск выполняется из PowerShell от имени администратора:
+Первый и последующие ручные запуски выполняются из PowerShell от имени администратора:
 
 ```powershell
 .\scripts\start-kanban-server.ps1
 ```
 
-## Основные команды
+Скрипт временно направляет только запрос регистрации Quick Tunnel на IPv4, после чего
+полностью восстанавливает исходный файл `hosts`. IPv6 сетевого адаптера не отключается.
+
+## Обновление существующей версии 1.1.0
+
+Перед обновлением создайте backup и убедитесь, что Git-дерево чистое. Затем примените пакет
+`Kanban_Board_Update_1.2.0.zip` и выполните миграцию:
 
 ```powershell
+cd D:\Kanban\repository\backend
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m alembic check
+.\.venv\Scripts\python.exe -m pytest
+```
+
+Данные пользователей, досок, колонок и карточек сохраняются. Новые поля получают значения
+`NULL`, а новые таблицы создаются рядом с существующими.
+
+## Основные административные команды
+
+```powershell
+cd D:\Kanban\repository
+
 # Состояние
 .\scripts\status-kanban.ps1
 
-# Запуск / остановка
+# Запуск и остановка
 .\scripts\start-kanban-server.ps1
 .\scripts\stop-kanban.ps1
 
-# Backup / restore
+# Backup и restore
 .\scripts\backup-kanban.ps1
 .\scripts\restore-kanban.ps1 -BackupPath "D:\Kanban\backups\kanban_....db"
 
-# Обновление сервера из main
+# Получить изменения из origin/main
 .\scripts\update-from-main.ps1 -RunTests -NoBrowser
 ```
 
 Пользователи:
 
 ```powershell
-cd .\backend
+cd D:\Kanban\repository\backend
 .\.venv\Scripts\python.exe -m scripts.manage_users list
 .\.venv\Scripts\python.exe -m scripts.manage_users create user01 --display-name "Иван Петров"
 .\.venv\Scripts\python.exe -m scripts.manage_users disable user01
 .\.venv\Scripts\python.exe -m scripts.manage_users enable user01
 .\.venv\Scripts\python.exe -m scripts.manage_users reset-password user01
 ```
+
+Отключённый пользователь теряет доступ, но его имя остаётся в истории, комментариях и
+карточках. Физическое удаление пользователей намеренно не предусмотрено.
 
 ## Проверки перед push
 
@@ -103,26 +135,28 @@ Get-ChildItem frontend\assets\js\*.js | ForEach-Object { node --check $_.FullNam
 ## Структура
 
 ```text
-backend/                     FastAPI, SQLAlchemy, Alembic, CLI и tests
-frontend/                    статический адаптивный SPA
-scripts/setup-server.ps1     первичная настройка серверного компьютера
-scripts/start-kanban-server.ps1 безопасный серверный запуск через IPv4 registration
-scripts/start-kanban.ps1     backend, Quick Tunnel, runtime commit и Pages
-scripts/status-kanban.ps1    состояние процессов и конфигурации
-scripts/update-from-main.ps1 обновление сервера из origin/main
-scripts/backup-kanban.ps1    проверенный SQLite backup
-scripts/restore-kanban.ps1   восстановление с подтверждением
-docs/                        инструкции и архитектура
+backend/                         FastAPI, SQLAlchemy, Alembic, CLI и тесты
+backend/alembic/versions/        миграции, включая 20260730_0002
+frontend/                        статический адаптивный SPA
+frontend/assets/js/card-detail.js панель карточки, комментарии и чек-лист
+scripts/setup-server.ps1         первоначальная настройка сервера
+scripts/start-kanban-server.ps1  безопасный запуск Quick Tunnel через IPv4 registration
+scripts/start-kanban.ps1         backend, tunnel, runtime-config и GitHub Pages
+scripts/status-kanban.ps1        состояние процессов и публичной конфигурации
+scripts/update-from-main.ps1     backup, pull, migration, tests и restart
+scripts/backup-kanban.ps1        согласованный SQLite backup
+scripts/restore-kanban.ps1       проверяемое восстановление
+docs/                            эксплуатационная и техническая документация
 ```
 
 ## Ограничения
 
 Quick Tunnel получает случайный URL после каждого запуска и не имеет SLA. Компьютер-сервер,
-backend, cloudflared и интернет должны работать. Проект не предназначен для хранения
-платёжных данных, паролей сторонних систем и критичных конфиденциальных документов.
+backend, `cloudflared` и интернет должны работать постоянно. Проект не предназначен для
+платёжных данных, паролей сторонних сервисов и критичных конфиденциальных документов.
 
-SQLite используется с одним Uvicorn worker. Для роста нагрузки критерии перехода на
-PostgreSQL описаны в [архитектуре](docs/architecture.md).
+SQLite используется с одним Uvicorn worker. Критерии перехода на PostgreSQL перечислены в
+[описании архитектуры](docs/architecture.md).
 
 ## Документация
 

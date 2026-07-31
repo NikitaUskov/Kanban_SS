@@ -1,6 +1,6 @@
 [project]
 name = "kanban-board-backend"
-version = "1.1.0"
+version = "1.2.0"
 description = "FastAPI backend for the Kanban Board MVP"
 requires-python = ">=3.11"
 

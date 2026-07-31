@@ -79,9 +79,7 @@ def create_users_batch(db: Session, items: list[NewUser]) -> list[User]:
         )
     with write_coordinator.write():
         try:
-            existing = set(
-                db.scalars(select(User.username).where(User.username.in_(names))).all()
-            )
+            existing = set(db.scalars(select(User.username).where(User.username.in_(names))).all())
             if existing:
                 raise AppError(
                     409,
@@ -163,6 +161,17 @@ def reset_password(db: Session, username: str, new_password: str) -> User:
             raise
 
 
-def list_users(db: Session) -> list[User]:
-    return list(db.scalars(select(User).order_by(User.username)).all())
+def require_active_user(db: Session, user_id: str) -> User:
+    user = db.scalar(select(User).where(User.id == user_id))
+    if user is None:
+        raise AppError(404, "USER_NOT_FOUND", "Пользователь не найден")
+    if not user.is_active:
+        raise AppError(409, "USER_INACTIVE", "Нельзя назначить отключённого пользователя")
+    return user
 
+
+def list_users(db: Session, *, active_only: bool = False) -> list[User]:
+    statement = select(User)
+    if active_only:
+        statement = statement.where(User.is_active.is_(True))
+    return list(db.scalars(statement.order_by(User.display_name, User.username)).all())

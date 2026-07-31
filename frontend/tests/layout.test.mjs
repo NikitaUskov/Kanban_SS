@@ -7,6 +7,14 @@ const appSource = await readFile(
   new URL("../assets/js/app.js", import.meta.url),
   "utf8",
 );
+const drawerSource = await readFile(
+  new URL("../assets/js/card-detail.js", import.meta.url),
+  "utf8",
+);
+const styles = await readFile(
+  new URL("../assets/css/styles.css", import.meta.url),
+  "utf8",
+);
 
 test("board filters are optional and controlled by an accessible toggle", () => {
   assert.match(html, /id="toggle-filters"/);
@@ -18,4 +26,19 @@ test("board filters are optional and controlled by an accessible toggle", () => 
 test("board list cards do not render column and card counters", () => {
   assert.doesNotMatch(appSource, /board\.column_count/);
   assert.doesNotMatch(appSource, /board\.active_card_count/);
+});
+
+test("existing card opens a responsive collaboration drawer", () => {
+  assert.match(html, /id="card-drawer"/);
+  assert.match(html, /id="comments-list"/);
+  assert.match(html, /id="checklist-items"/);
+  assert.match(drawerSource, /class CardDrawerController/);
+  assert.match(styles, /\.card-drawer/);
+  assert.match(styles, /width: 100vw/);
+});
+
+test("columns can be collapsed without changing shared board data", () => {
+  assert.match(appSource, /kanban\.collapsedColumns/);
+  assert.match(appSource, /toggleColumnCollapsed/);
+  assert.match(styles, /\.kanban-column--collapsed/);
 });

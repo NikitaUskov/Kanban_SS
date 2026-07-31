@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <meta name="description" content="Многопользовательская канбан-доска">
+    <meta name="description" content="Многопользовательская канбан-доска с ответственными, комментариями и чек-листами">
     <title>Kanban Board</title>
     <link rel="stylesheet" href="./assets/css/styles.css">
   </head>
@@ -157,13 +157,27 @@
                     <option value="">Все</option>
                     <option value="with">Со сроком</option>
                     <option value="without">Без срока</option>
+                    <option value="today">Сегодня</option>
                     <option value="overdue">Просроченные</option>
                   </select>
                 </label>
                 <label>
-                  <span>Последнее изменение</span>
-                  <select id="filter-user"><option value="">Все пользователи</option></select>
+                  <span>Ответственный</span>
+                  <select id="filter-assignee"><option value="">Все пользователи</option></select>
                 </label>
+                <label>
+                  <span>Выполнение</span>
+                  <select id="filter-completed">
+                    <option value="">Все</option>
+                    <option value="no">Активные</option>
+                    <option value="yes">Завершённые</option>
+                  </select>
+                </label>
+                <div class="filter-checks">
+                  <label class="checkbox-line"><input id="filter-mine" type="checkbox"> Только мои</label>
+                  <label class="checkbox-line"><input id="filter-comments" type="checkbox"> С комментариями</label>
+                  <label class="checkbox-line"><input id="filter-checklist" type="checkbox"> С чек-листом</label>
+                </div>
                 <button id="clear-filters" class="button button--ghost filter-reset" type="button">
                   Сбросить фильтры
                 </button>
@@ -228,6 +242,12 @@
         <label>
           Название
           <input id="card-form-title" maxlength="200" required>
+        </label>
+        <label>
+          Ответственный
+          <select id="card-form-assignee">
+            <option value="">Не назначен</option>
+          </select>
         </label>
         <label>
           Описание
@@ -402,6 +422,91 @@
         </div>
       </form>
     </dialog>
+
+    <div id="card-drawer-backdrop" class="drawer-backdrop" hidden></div>
+    <aside id="card-drawer" class="card-drawer" hidden aria-labelledby="card-detail-heading">
+      <div class="card-drawer__header">
+        <div>
+          <p id="card-detail-id" class="eyebrow">Карточка</p>
+          <h2 id="card-detail-heading">Задача</h2>
+        </div>
+        <button id="close-card-drawer" class="icon-button" type="button" aria-label="Закрыть карточку">×</button>
+      </div>
+      <div id="card-detail-loading" class="empty-state">Загрузка карточки…</div>
+      <div id="card-detail-content" class="card-detail" hidden>
+        <section class="card-detail__section card-detail__main">
+          <label>
+            Название
+            <input id="card-detail-title" maxlength="200">
+          </label>
+          <label>
+            Описание
+            <textarea id="card-detail-description" maxlength="20000" rows="6" placeholder="Опишите задачу, контекст и ожидаемый результат"></textarea>
+          </label>
+          <div class="card-detail__grid">
+            <label>
+              Ответственный
+              <select id="card-detail-assignee"><option value="">Не назначен</option></select>
+            </label>
+            <label>
+              Приоритет
+              <select id="card-detail-priority">
+                <option value="low">Низкий</option>
+                <option value="normal">Обычный</option>
+                <option value="high">Высокий</option>
+                <option value="critical">Критический</option>
+              </select>
+            </label>
+            <label>
+              Срок
+              <input id="card-detail-due" type="datetime-local">
+            </label>
+            <label>
+              Колонка
+              <input id="card-detail-column" disabled>
+            </label>
+          </div>
+          <label class="completion-toggle">
+            <input id="card-detail-completed" type="checkbox">
+            <span>Задача завершена</span>
+          </label>
+          <p id="card-detail-meta" class="card-detail__meta"></p>
+          <p id="card-detail-error" class="form-error" role="alert" hidden></p>
+          <div class="card-detail__actions">
+            <button id="save-card-detail" class="button button--primary" type="button">Сохранить изменения</button>
+            <button id="archive-card-detail" class="button button--danger" type="button">В архив</button>
+          </div>
+        </section>
+
+        <section class="card-detail__section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Шаги выполнения</p>
+              <h3>Чек-лист <span id="checklist-progress" class="section-counter"></span></h3>
+            </div>
+          </div>
+          <div id="checklist-items" class="checklist-items"></div>
+          <form id="checklist-form" class="inline-create-form">
+            <input id="checklist-new-text" maxlength="500" placeholder="Добавить пункт чек-листа" required>
+            <button class="button button--secondary" type="submit">Добавить</button>
+          </form>
+        </section>
+
+        <section class="card-detail__section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Обсуждение</p>
+              <h3>Комментарии <span id="comments-count" class="section-counter"></span></h3>
+            </div>
+          </div>
+          <div id="comments-list" class="comments-list"></div>
+          <form id="comment-form" class="comment-form">
+            <textarea id="comment-new-body" maxlength="10000" rows="3" placeholder="Написать комментарий" required></textarea>
+            <button class="button button--primary" type="submit">Отправить</button>
+          </form>
+        </section>
+      </div>
+    </aside>
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
     <script type="module" src="./assets/js/app.js"></script>

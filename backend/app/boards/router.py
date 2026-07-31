@@ -105,4 +105,3 @@ def activity_route(
         items=[ActivityItem.model_validate(item) for item in entries],
         next_before_id=next_id,
     )
-

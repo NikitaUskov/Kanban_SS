@@ -1,11 +1,11 @@
 {
   "name": "kanban-board-frontend",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check": "node --check assets/js/app.js"
+    "check": "node --check assets/js/app.js && node --check assets/js/card-detail.js && node --check assets/js/state.js"
   }
 }
 

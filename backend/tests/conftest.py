@@ -10,7 +10,9 @@ os.environ["ALLOWED_ORIGINS"] = "http://localhost:5500"
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 
+from app import EXPECTED_ALEMBIC_REVISION
 from app.database import Base, SessionLocal, engine
 from app.main import app
 from app.users.service import NewUser, create_user
@@ -18,9 +20,19 @@ from app.users.service import NewUser, create_user
 
 @pytest.fixture(autouse=True)
 def clean_database():
+    with engine.begin() as connection:
+        connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
+        connection.execute(
+            text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
+            {"revision": EXPECTED_ALEMBIC_REVISION},
+        )
     yield
+    with engine.begin() as connection:
+        connection.execute(text("DROP TABLE IF EXISTS alembic_version"))
     Base.metadata.drop_all(bind=engine)
 
 
@@ -82,4 +94,3 @@ def board(client, owner_headers):
     )
     assert response.status_code == 201, response.text
     return response.json()
-

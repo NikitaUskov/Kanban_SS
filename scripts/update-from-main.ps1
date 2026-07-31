@@ -57,6 +57,10 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Миграции завершились ошибкой."
     }
+    & $python -m alembic check
+    if ($LASTEXITCODE -ne 0) {
+        throw "Модель SQLAlchemy и Alembic migration расходятся."
+    }
     if ($RunTests) {
         & $python -m pip install -r requirements-dev.txt
         if ($LASTEXITCODE -ne 0) {

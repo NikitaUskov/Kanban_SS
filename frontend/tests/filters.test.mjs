@@ -21,7 +21,10 @@ const cards = [
     description: "Проверить договор",
     priority: "critical",
     due_date: "2026-01-01T00:00:00Z",
-    updated_by_user_id: "user-1",
+    assignee_user_id: "user-1",
+    comment_count: 2,
+    checklist_total: 3,
+    completed_at: null,
     archived_at: null,
   },
   {
@@ -31,10 +34,25 @@ const cards = [
     description: null,
     priority: "normal",
     due_date: "2026-01-01T00:00:00Z",
-    updated_by_user_id: "user-2",
+    assignee_user_id: null,
+    comment_count: 0,
+    checklist_total: 0,
+    completed_at: "2026-01-02T00:00:00Z",
     archived_at: null,
   },
 ];
+
+const emptyFilters = {
+  query: "",
+  priority: "",
+  columnId: "",
+  due: "",
+  assigneeId: "",
+  mine: false,
+  withComments: false,
+  withChecklist: false,
+  completed: "",
+};
 
 test("completed card is not overdue", () => {
   const now = new Date("2026-07-27T00:00:00Z");
@@ -45,13 +63,7 @@ test("completed card is not overdue", () => {
 test("query and priority filters are combined", () => {
   const result = filterCards(
     cards,
-    {
-      query: "договор",
-      priority: "critical",
-      columnId: "",
-      due: "",
-      updatedBy: "",
-    },
+    { ...emptyFilters, query: "договор", priority: "critical" },
     columns,
     new Date("2026-07-27T00:00:00Z"),
   );
@@ -61,17 +73,34 @@ test("query and priority filters are combined", () => {
   );
 });
 
-test("any filter disables drag-and-drop", () => {
-  assert.equal(
-    hasActiveFilters({
-      query: "",
-      priority: "",
-      columnId: "todo",
-      due: "",
-      updatedBy: "",
-    }),
-    true,
+test("mine comments and checklist filters are combined", () => {
+  const result = filterCards(
+    cards,
+    {
+      ...emptyFilters,
+      mine: true,
+      withComments: true,
+      withChecklist: true,
+      completed: "no",
+    },
+    columns,
+    new Date("2026-07-27T00:00:00Z"),
+    "user-1",
   );
+  assert.deepEqual(result.map((item) => item.id), ["1"]);
+});
+
+test("unassigned filter returns only cards without assignee", () => {
+  const result = filterCards(
+    cards,
+    { ...emptyFilters, assigneeId: "__none__" },
+    columns,
+  );
+  assert.deepEqual(result.map((item) => item.id), ["2"]);
+});
+
+test("any filter disables drag-and-drop", () => {
+  assert.equal(hasActiveFilters({ ...emptyFilters, columnId: "todo" }), true);
 });
 
 test("polling uses 5/20 second cadence and defers during drag", () => {

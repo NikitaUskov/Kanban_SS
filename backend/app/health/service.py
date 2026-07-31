@@ -16,6 +16,8 @@ REQUIRED_TABLES = {
     "boards",
     "columns",
     "cards",
+    "card_comments",
+    "card_checklist_items",
     "activity_log",
     "alembic_version",
 }
@@ -76,4 +78,3 @@ def ready() -> ReadyResponse:
         alembic_revision=EXPECTED_ALEMBIC_REVISION,
         required_tables=sorted(REQUIRED_TABLES),
     )
-

@@ -1,105 +1,140 @@
-# Архитектура
+# Архитектура Kanban Board 1.2.0
 
-## Общая схема
+## Компоненты
 
-```mermaid
-flowchart TD
-    U["Браузер пользователя"] --> P["GitHub Pages<br/>HTML, CSS, JavaScript"]
-    P --> T["Текущий Quick Tunnel<br/>HTTPS trycloudflare.com"]
-    T --> A["FastAPI<br/>127.0.0.1:8000, 1 worker"]
-    A --> D["SQLAlchemy + SQLite WAL"]
-    D --> F["C:\Kanban\data\kanban.db"]
+```text
+GitHub Pages SPA
+  ├─ runtime config polling
+  ├─ access/refresh token client
+  ├─ board snapshot/revision polling
+  └─ responsive card drawer
+
+Cloudflare Quick Tunnel
+  └─ HTTPS → http://127.0.0.1:8000
+
+FastAPI
+  ├─ auth
+  ├─ boards / columns / cards
+  ├─ comments / checklist / user directory
+  ├─ activity log
+  └─ health / readiness
+
+SQLite WAL
+  └─ Alembic revision 20260730_0002
 ```
 
-GitHub Pages хранит только статический интерфейс и `runtime-config.json`. Python, база,
-технические логи, пароли и токены находятся на компьютере владельца.
+Frontend статический и не содержит секретов. Backend слушает только loopback. Публичный адрес
+меняется при каждом старте; frontend узнаёт его из `runtime-config.json`.
 
-## Backend
+## Модель доступа
 
-Backend — модульный монолит. HTTP-обработчики выполняют валидацию и вызывают сервисный слой;
-транзакционная бизнес-логика находится в `service.py`.
+Ролей внутри приложения нет. Каждый активный пользователь:
 
-| Модуль | Ответственность |
-| --- | --- |
-| `auth` | Argon2id, JWT, refresh rotation, logout, ограничение входа |
-| `boards` | список, создание, snapshot, revision, архив |
-| `columns` | колонки, порядок, WIP, безопасное удаление |
-| `cards` | карточки, позиции, перемещение, архив |
-| `activity` | атомарный предметный журнал и идемпотентность |
-| `health` | liveness, ready, таблицы и Alembic revision |
-| `users` | локальное административное управление |
+- видит все доски;
+- может менять доски, колонки и карточки;
+- может назначать любого активного пользователя ответственным;
+- может писать комментарии;
+- может редактировать и удалять только собственные комментарии.
 
-Все внешние идентификаторы — UUID в строковом формате. Все даты на границе API имеют UTC.
-Тип `UTCDateTime` компенсирует то, что SQLite сам не сохраняет сведения о часовом поясе.
+Администрирование учётных записей выполняется локальным CLI. Это исключает публичный endpoint
+создания пользователей.
 
-## Мутация
+## Модель данных
 
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant R as Router
-    participant W as WriteCoordinator
-    participant S as Service
-    participant DB as SQLite
-    B->>R: request + expected_version + client_request_id
-    R->>W: acquire process write lock
-    W->>S: execute business operation
-    S->>DB: validate + change + activity_log
-    DB-->>S: commit one transaction
-    S-->>B: confirmed server state
+### `users`
+
+Учётные записи, Argon2id hash и признак активности. Пользователь не удаляется физически.
+
+### `boards`
+
+Содержит `revision` для дешёвой проверки изменений и `version` для optimistic locking.
+
+### `columns`
+
+Позиция, WIP-limit, признак done и soft archive.
+
+### `cards`
+
+Основные поля:
+
+```text
+id, board_id, column_id
+text fields, priority, due_date
+assignee_user_id
+completed_at
+position, version
+created_by_user_id, updated_by_user_id
+archived_at, timestamps
 ```
 
-`WriteCoordinator` — общий `threading.RLock` процесса. Он охватывает каждую запись, включая
-проверку версии, WIP, пересчёт позиций, изменение сущности и `activity_log`. Чтения блокировку
-не получают. Поэтому backend запускается только одним worker.
+`assignee_user_id` nullable. Завершение не привязано автоматически к done-колонке.
 
-## Синхронизация
+### `card_comments`
 
-Каждая доска имеет:
+```text
+id, card_id, author_user_id
+body, version
+edited_at, deleted_at
+timestamps
+```
 
-- `revision` — меняется при любом содержательном изменении доски;
-- `version` — оптимистическая версия самой доски.
+Удаление мягкое, чтобы не разрушать аудит. Полные тексты комментариев не пишутся в технический
+лог.
 
-Открытая вкладка читает только `/boards/{id}/revision` каждые 5 секунд; скрытая — каждые
-20 секунд. Snapshot загружается только при новом `revision`. Во время drag-and-drop polling
-откладывается до завершения операции.
+### `card_checklist_items`
 
-Карточки и колонки также имеют `version`. При несовпадении `expected_version` backend отвечает
-`409`, передаёт актуальную версию, а интерфейс загружает подтверждённый snapshot.
+```text
+id, card_id, text, position
+is_completed
+completed_by_user_id, completed_at
+version, timestamps
+```
 
-## Идемпотентность
+Позиции плотные, начиная с нуля. Перестановка выполняется под общей write-блокировкой.
 
-Мутации принимают UUID `client_request_id`. Он сохраняется в уникальном поле
-`activity_log.client_request_id` той же транзакцией. Повтор операции возвращает уже созданную
-сущность и не создаёт дубликат. Повторное использование того же UUID для другого типа операции
-возвращает `409 CLIENT_REQUEST_ID_REUSED`.
+### `activity_log`
 
-## Позиции
+Append-only предметный журнал. Содержит тип действия, сущность, краткое описание, безопасные
+структурированные детали и `client_request_id`.
 
-Позиции колонок и карточек — целые числа от нуля без пропусков в активном списке. Вставка,
-перемещение, архивирование и удаление колонки пересчитывают затронутый список под общей
-блокировкой. Сдвинутые сущности увеличивают `version`.
+## Согласованность записи
 
-Удаление непустой колонки требует явного решения:
+SQLite работает с одним Uvicorn worker. Все составные мутации проходят через
+`WriteCoordinator` и одну транзакцию:
 
-- перенести все карточки в другую активную колонку с проверкой WIP;
-- архивировать карточки.
+1. проверяется idempotency key;
+2. проверяются версия и ограничения;
+3. меняются сущность и зависимые позиции;
+4. увеличиваются `card.version`, `board.version` и `board.revision`;
+5. добавляется activity record;
+6. выполняется commit.
 
-Молчаливого каскадного удаления нет.
+Это предотвращает промежуточное состояние, когда комментарий создан, а revision доски не
+обновлён.
 
-## Авторизация
+## Polling
 
-- Пароль: Argon2id, `m=65536`, `t=3`, `p=4`.
-- Access JWT: 12 часов, хранится в памяти браузера и `sessionStorage`.
-- Refresh JWT: 30 дней, хранится в `localStorage`; backend хранит только SHA-256 digest.
-- Refresh ротационный: использованный токен сразу отзывается.
-- Отключённый пользователь блокируется при каждом защищённом запросе.
-- Неудачные входы ограничены по сочетанию IP + username: 10 попыток за 10 минут.
-- Ролей owner/editor/viewer нет; любой активный пользователь видит все доски.
+Frontend проверяет revision активной доски. При изменении загружает новый snapshot. Во время
+перетаскивания обновление откладывается, чтобы не разрушать drag state.
+
+Детали комментариев и чек-листа загружаются отдельным `GET /cards/{id}` только при открытии
+панели. Snapshot хранит агрегаты для компактных индикаторов. Так доска не передаёт весь текст
+комментариев на каждом polling.
+
+## Персональное UI-состояние
+
+Свёрнутые колонки хранятся в браузере:
+
+```text
+kanban.collapsedColumns.<boardId>
+```
+
+Открытость панели фильтров также хранится локально. Эти настройки не влияют на других
+пользователей и не создают серверных конфликтов.
 
 ## SQLite
 
-На каждом соединении задаются:
+Для соединений включены:
 
 ```sql
 PRAGMA foreign_keys = ON;
@@ -108,26 +143,36 @@ PRAGMA synchronous = NORMAL;
 PRAGMA busy_timeout = 10000;
 ```
 
-Схема изменяется только Alembic-миграциями. `ready` проверяет `SELECT 1`, обязательные таблицы
-и ожидаемую Alembic revision.
+Schema readiness проверяет revision и таблицы:
 
-## Переход на PostgreSQL
+```text
+users, refresh_tokens, boards, columns, cards,
+card_comments, card_checklist_items, activity_log, alembic_version
+```
 
-Хранилище следует пересмотреть, если наблюдается хотя бы один устойчивый признак:
+## Безопасность
+
+- Argon2id для паролей;
+- JWT access 12 часов;
+- ротационный refresh 30 дней, в базе только SHA-256 digest;
+- rate limit login по IP + username;
+- CORS ограничен origin GitHub Pages и локальной разработкой;
+- backend не слушает LAN-интерфейс;
+- секреты, пароли, токены и полные описания не логируются.
+
+Quick Tunnel не заменяет инфраструктуру с SLA. Он подходит для внутренней команды при
+понимании, что доступ зависит от домашнего/офисного компьютера и бесплатного сервиса.
+
+## Когда переходить на PostgreSQL
+
+Переход нужен при устойчивом проявлении хотя бы одного условия:
 
 - необработанные `database is locked`;
-- 95-й перцентиль записи выше 1 секунды без внешней сети;
 - очередь записи держится более 5 секунд;
-- число пользователей или интенсивность мутаций превышают проверенный нагрузочный профиль.
+- p95 локальной мутации выше 1 секунды;
+- заметно больше 30 одновременно активных пользователей;
+- необходимы несколько backend workers или несколько серверов;
+- появляются тяжёлые вложения, отчёты или сложные зависимости задач.
 
-Публичное API и frontend от типа базы не зависят. При миграции потребуется новый SQLAlchemy URL,
-драйвер PostgreSQL и отдельная миграция данных.
-
-## Логи
-
-Технический лог: `C:\Kanban\logs\kanban-backend.log`, ротация 10 МБ × 10 архивов. Записываются
-время, уровень, request_id, метод, путь, статус, длительность и тип ошибки. Пароли,
-Authorization, access/refresh tokens, JWT secret и полные описания карточек не логируются.
-
-Предметный `activity_log` является бизнес-данными и не удаляется ротацией логов.
-
+Публичное API можно сохранить; изменятся SQLAlchemy URL, драйвер, миграция данных и стратегия
+блокировок.

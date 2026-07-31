@@ -1,7 +1,7 @@
 """Board business logic and snapshot queries."""
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.activity.service import add_activity, find_idempotent, list_activity
 from app.boards.schemas import (
@@ -18,7 +18,7 @@ from app.cards.schemas import CardResponse
 from app.columns.schemas import ColumnResponse
 from app.concurrency import write_coordinator
 from app.errors import AppError
-from app.models import Board, Card, Column, User
+from app.models import Board, Card, CardChecklistItem, CardComment, Column, User
 from app.timeutils import utcnow
 
 DEFAULT_COLUMNS = (
@@ -263,7 +263,13 @@ def get_snapshot(db: Session, board_id: str, include_archived: bool) -> BoardSna
     )
     card_statement = (
         select(Card)
-        .options(joinedload(Card.created_by), joinedload(Card.updated_by))
+        .options(
+            joinedload(Card.created_by),
+            joinedload(Card.updated_by),
+            joinedload(Card.assignee),
+            selectinload(Card.comments).joinedload(CardComment.author),
+            selectinload(Card.checklist_items).joinedload(CardChecklistItem.completed_by),
+        )
         .where(Card.board_id == board_id)
         .order_by(Card.column_id, Card.position, Card.id)
     )

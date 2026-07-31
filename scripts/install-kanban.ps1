@@ -155,7 +155,7 @@ foreach ($requiredOrigin in @($pagesOrigin, "http://127.0.0.1:5500", "http://loc
     }
 }
 
-$envText = Set-EnvValue -Text $envText -Key "APP_VERSION" -Value "1.1.0"
+$envText = Set-EnvValue -Text $envText -Key "APP_VERSION" -Value "1.2.0"
 $envText = Set-EnvValue -Text $envText -Key "DATABASE_URL" -Value "sqlite:///$normalizedInstall/data/kanban.db"
 $envText = Set-EnvValue -Text $envText -Key "LOG_DIR" -Value "$normalizedInstall/logs"
 $envText = Set-EnvValue -Text $envText -Key "RUN_DIR" -Value "$normalizedInstall/run"

@@ -1,39 +1,40 @@
-# Развёртывание Kanban Board 1.1.0 на Windows-компьютере-сервере
+# Развёртывание Kanban Board 1.2.0 на Windows-компьютере-сервере
 
-Инструкция рассчитана на Windows 10/11 и Windows PowerShell 5.1. В примерах проект расположен
-в `D:\Kanban\repository`, а данные — в `D:\Kanban\data`. Другой диск допустим: везде замените
-`D:\Kanban` на свой путь.
+Инструкция рассчитана на Windows 10/11, PowerShell 5.1 или PowerShell 7 и постоянный путь
+`D:\Kanban`. Другой диск допустим: замените путь во всех командах и передайте его в
+`-InstallRoot`.
 
-## 1. Что будет работать на сервере
+## 1. Как устроено размещение
 
-- GitHub Pages хранит HTML, CSS, JavaScript и `runtime-config.json`.
-- FastAPI и SQLite работают только на серверном компьютере.
-- Cloudflare Quick Tunnel выдаёт временный HTTPS-адрес API.
-- При каждом запуске скрипт публикует новый адрес в `runtime-config.json` и отправляет его в
-  GitHub через HTTPS.
-- Пользователи всегда открывают один адрес GitHub Pages.
+```text
+GitHub Pages
+  https://<owner>.github.io/<repository>/
+             │
+             │ runtime-config.json
+             ▼
+Cloudflare Quick Tunnel — случайный URL после каждого запуска
+             │
+             ▼
+FastAPI http://127.0.0.1:8000
+             │
+             ▼
+SQLite D:\Kanban\data\kanban.db
+```
 
-Quick Tunnel бесплатен, но Cloudflare предназначает его для тестирования и разработки, не
-гарантирует uptime и ограничивает число одновременно обрабатываемых запросов. Официальная
-документация: <https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/do-more-with-tunnels/trycloudflare/>.
+Frontend всегда открывается по одному адресу GitHub Pages. После запуска сервер получает новый
+Quick Tunnel URL, записывает его в `frontend/runtime-config.json`, создаёт runtime commit и
+отправляет его в GitHub через HTTPS.
 
-## 2. Подготовьте GitHub
+## 2. Требования
 
-1. В репозитории откройте `Settings -> Pages`.
-2. В `Build and deployment` выберите `Source: GitHub Actions`.
-3. Убедитесь, что workflow `Deploy GitHub Pages` завершился успешно.
-4. Запишите постоянный адрес вида:
+- компьютер должен быть включён, когда команда работает с доской;
+- Windows-пользователь сервера должен иметь права администратора для временной записи в
+  `hosts` во время регистрации Quick Tunnel;
+- GitHub-репозиторий должен существовать и содержать проект;
+- GitHub Pages должен публиковать каталог `frontend` через workflow;
+- исходящие HTTPS-соединения к GitHub и Cloudflare должны быть разрешены.
 
-   ```text
-   https://<owner>.github.io/<repository>/
-   ```
-
-GitHub описывает публикацию Pages через Actions здесь:
-<https://docs.github.com/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site>.
-
-## 3. Установите программы на сервер
-
-Откройте PowerShell от имени администратора:
+Минимальные программы:
 
 ```powershell
 winget install --exact --id Python.Python.3.11 --accept-package-agreements --accept-source-agreements
@@ -41,37 +42,48 @@ winget install --exact --id Git.Git --accept-package-agreements --accept-source-
 winget install --exact --id Cloudflare.cloudflared --accept-package-agreements --accept-source-agreements
 ```
 
-Закройте PowerShell, откройте заново и проверьте:
+Для локальных frontend-тестов дополнительно нужен Node.js LTS:
 
 ```powershell
-py -3.11 --version
-git --version
-cloudflared --version
+winget install --exact --id OpenJS.NodeJS.LTS --accept-package-agreements --accept-source-agreements
 ```
 
-## 4. Клонируйте репозиторий через HTTPS
+После установки закройте PowerShell и откройте заново.
+
+## 3. Подготовка каталога и клонирование
 
 ```powershell
-New-Item -ItemType Directory -Path D:\Kanban -Force | Out-Null
+New-Item D:\Kanban -ItemType Directory -Force | Out-Null
 cd D:\Kanban
+
 git clone https://github.com/<owner>/<repository>.git repository
-cd D:\Kanban\repository
-git remote -v
+cd .\repository
 ```
 
-`origin` должен начинаться с `https://github.com/`, а не с `git@github.com:`. HTTPS работает
-через порт 443 и обычно устойчивее в сетях, где SSH-порт 22 ограничен. Официальная команда
-смены remote: <https://docs.github.com/get-started/git-basics/managing-remote-repositories>.
-
-При необходимости:
+Проверьте:
 
 ```powershell
-git remote set-url origin https://github.com/<owner>/<repository>.git
+git remote -v
+git branch --show-current
+git status --short
 ```
 
-## 5. Запустите автоматическую настройку
+Ожидаются HTTPS remote, ветка `main` и пустой вывод `git status --short`.
 
-PowerShell должен быть открыт от имени администратора:
+## 4. Разблокировка PowerShell-файлов
+
+ZIP и файлы, скачанные из браузера, могут иметь метку Internet Zone. Снимите её:
+
+```powershell
+Get-ChildItem D:\Kanban\repository\scripts -Recurse -Filter "*.ps1" | Unblock-File
+Set-ExecutionPolicy -Scope Process Bypass -Force
+```
+
+Скрипты проекта сохранены в UTF-8 with BOM и CRLF для Windows PowerShell 5.1.
+
+## 5. Первичная настройка
+
+Откройте PowerShell **от имени администратора**:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
@@ -82,128 +94,171 @@ cd D:\Kanban\repository
   -GitHubOwner "<owner>" `
   -RepositoryName "<repository>" `
   -FirstUsername "admin" `
-  -FirstDisplayName "Владелец" `
+  -FirstDisplayName "Владелец доски" `
   -RegisterAutostart
 ```
 
-Во время создания первого пользователя пароль вводится два раза и не отображается. Скрипт:
+Скрипт:
 
-1. создаёт `.venv` и устанавливает зависимости;
-2. создаёт или безопасно обновляет `backend\.env`;
-3. генерирует `JWT_SECRET`, если `.env` создаётся впервые;
-4. добавляет корректный CORS-origin в нижнем регистре;
-5. создаёт каталоги данных, логов, backup и PID;
-6. применяет Alembic-миграции;
+1. создаёт `data`, `logs`, `backups` и `run`;
+2. создаёт `backend\.venv`;
+3. устанавливает зависимости;
+4. создаёт или аккуратно обновляет `backend\.env`;
+5. генерирует локальный `JWT_SECRET`, не выводя его в консоль;
+6. добавляет CORS origin GitHub Pages в нижнем регистре;
 7. переводит Git remote на HTTPS;
-8. при указанном флаге регистрирует автозапуск и ежедневный backup.
+8. применяет Alembic-миграции до `20260730_0002`;
+9. создаёт первого пользователя;
+10. при `-RegisterAutostart` создаёт задачи запуска и backup.
 
-## 6. Завершите GitHub-аутентификацию
+Пароль первого пользователя вводится скрыто в консоли.
 
-До первого автоматического запуска выполните вручную:
+## 6. Ручная проверка установки
 
 ```powershell
-cd D:\Kanban\repository
-git push --dry-run origin main
+Test-Path D:\Kanban\repository\backend\.venv\Scripts\python.exe
+Test-Path D:\Kanban\repository\backend\.env
+Test-Path D:\Kanban\data\kanban.db
 ```
 
-Git Credential Manager может открыть браузер. Авторизуйтесь под владельцем репозитория.
-Команда `--dry-run` не отправляет изменения, но проверяет право на push.
+Все команды должны вернуть `True`.
+
+Проверьте схему:
+
+```powershell
+cd D:\Kanban\repository\backend
+.\.venv\Scripts\python.exe -m alembic current
+.\.venv\Scripts\python.exe -m alembic check
+.\.venv\Scripts\python.exe -c "from app.health.service import ready; print(ready().model_dump_json())"
+```
+
+Ожидаемая revision: `20260730_0002`.
 
 ## 7. Первый запуск
 
-Используйте именно серверный скрипт:
+Вернитесь в корень и убедитесь, что Git-дерево чистое:
 
 ```powershell
 cd D:\Kanban\repository
+git status --short
+```
+
+Откройте PowerShell от имени администратора:
+
+```powershell
 .\scripts\start-kanban-server.ps1
 ```
 
-Он временно закрепляет `api.trycloudflare.com` за IPv4 только на время регистрации Quick
-Tunnel, затем удаляет запись. IPv6 в Windows не отключается и системные сетевые приоритеты не
-изменяются.
+Не запускайте `start-kanban.ps1` напрямую на сети, где регистрация Cloudflare по IPv6
+сбрасывается. `start-kanban-server.ps1`:
 
-Нормальный вывод содержит:
+- получает A-запись `api.trycloudflare.com`;
+- временно добавляет её в `hosts`;
+- регистрирует Quick Tunnel по IPv4;
+- запускает соединение tunnel edge по IPv4/HTTP2;
+- восстанавливает исходный `hosts` побайтово;
+- не отключает IPv6 сетевого адаптера.
+
+Успешный вывод содержит:
 
 ```text
-Backend запущен...
-Ожидание публикации DNS Quick Tunnel...
-Quick Tunnel отвечает: https://....trycloudflare.com
-runtime-config.json обновлён...
+Backend запущен: PID ..., версия 1.2.0.
+Quick Tunnel отвечает: https://....trycloudflare.com, API v1.
+runtime-config.json обновлён: configVersion=...
 GitHub Pages получил configVersion=...
 ```
 
-## 8. Проверка
+## 8. Проверка API и CORS
+
+Локально:
 
 ```powershell
-.\scripts\status-kanban.ps1
 Invoke-RestMethod http://127.0.0.1:8000/api/v1/health | Format-List
 Invoke-RestMethod http://127.0.0.1:8000/api/v1/ready | Format-List
 ```
 
-Затем откройте Pages URL, нажмите `Ctrl+F5`, войдите и создайте тестовую доску.
-
-Проверка CORS:
+Опубликованная конфигурация:
 
 ```powershell
 $pagesConfig = "https://<owner>.github.io/<repository>/runtime-config.json?ts=$([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds())"
 $config = Invoke-RestMethod $pagesConfig
+$config | Format-List
+Invoke-RestMethod "$($config.apiBaseUrl)/health" | Format-List
+```
+
+CORS preflight:
+
+```powershell
 curl.exe -i -X OPTIONS "$($config.apiBaseUrl)/health" `
-  -H "Origin: https://<owner>.github.io" `
+  -H "Origin: https://<owner-lowercase>.github.io" `
   -H "Access-Control-Request-Method: GET" `
   -H "Access-Control-Request-Headers: x-request-id"
 ```
 
-Ответ должен содержать `HTTP/1.1 200` и `access-control-allow-origin`.
+Ответ должен содержать `access-control-allow-origin` с origin GitHub Pages.
 
-## 9. Автозапуск
+## 9. GitHub Pages
 
-Если `-RegisterAutostart` не использовался:
+Workflow `.github/workflows/deploy-pages.yml` публикует `frontend`. В настройках репозитория:
 
-```powershell
-cd D:\Kanban\repository
-.\scripts\register-autostart.ps1 -StartNow
-```
+1. откройте `Settings → Pages`;
+2. в `Build and deployment` выберите `GitHub Actions`;
+3. дождитесь зелёного workflow `Deploy GitHub Pages`.
 
-Задача запускается при входе владельца сервера с повышенными правами. Это нужно для временной
-записи в `hosts`. Вторая задача ежедневно создаёт проверенную копию базы в 03:00.
+Frontend не содержит секретов. `runtime-config.json` содержит только публичный адрес API и
+версии.
 
-Проверка:
+## 10. Автозапуск
 
-```powershell
-Get-ScheduledTaskInfo -TaskName "KanbanBoard-Autostart" |
-  Select-Object LastRunTime,LastTaskResult
-Get-ScheduledTaskInfo -TaskName "KanbanBoard-DailyBackup" |
-  Select-Object LastRunTime,LastTaskResult
-```
-
-`LastTaskResult = 0` означает успешный запуск.
-
-## 10. Перенос существующих данных на новый сервер
-
-На старом компьютере:
+Если параметр `-RegisterAutostart` не использовался:
 
 ```powershell
 cd D:\Kanban\repository
+.\scripts\register-autostart.ps1
+```
+
+Создаются две задачи Task Scheduler:
+
+- запуск Kanban при входе владельца;
+- ежедневный backup.
+
+Проверьте после перезагрузки:
+
+```powershell
+.\scripts\status-kanban.ps1
+```
+
+## 11. Перенос существующей базы на новый сервер
+
+На старом сервере:
+
+```powershell
 .\scripts\backup-kanban.ps1
 .\scripts\stop-kanban.ps1
-Get-ChildItem D:\Kanban\backups -Filter "kanban_*.db" |
-  Sort-Object LastWriteTime -Descending |
-  Select-Object -First 1 FullName,Length,LastWriteTime
 ```
 
-Скопируйте выбранный `.db` и соседний `.json` на новый сервер, например в
-`D:\Kanban\incoming-backup`. После установки нового сервера:
+На новом сервере сначала выполните чистую установку, затем остановите сервис и восстановите
+backup:
 
 ```powershell
-cd D:\Kanban\repository
-.\scripts\stop-kanban.ps1
-.\scripts\restore-kanban.ps1 `
-  -BackupPath "D:\Kanban\incoming-backup\kanban_YYYY-MM-DD_HH-mm-ss.db"
+.\scripts\restore-kanban.ps1 -BackupPath "D:\путь\к\backup.db"
 ```
 
-Одновременно держать старый и новый сервер запущенными нельзя: оба будут публиковать разные
-Quick Tunnel URL в один `runtime-config.json`.
+После восстановления примените миграции текущего релиза:
 
-Копировать старый `.env` необязательно. Новый `JWT_SECRET` завершит старые браузерные сессии,
-но пользователи и пароли сохранятся в базе. Старый `.env` можно переносить только через
-защищённый канал и никогда не добавлять в Git.
+```powershell
+cd .\backend
+.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m alembic check
+```
+
+## 12. Что нельзя переносить в Git
+
+Никогда не добавляйте:
+
+- `backend/.env`;
+- `backend/.venv`;
+- `*.db`, `*.db-wal`, `*.db-shm`;
+- `logs`, `backups`, `run`;
+- CSV с открытыми паролями;
+- содержимое `JWT_SECRET` и токены.
