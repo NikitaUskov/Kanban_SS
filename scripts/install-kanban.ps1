@@ -39,6 +39,19 @@ function Set-EnvValue {
     return $Text.TrimEnd() + [Environment]::NewLine + "$Key=$Value" + [Environment]::NewLine
 }
 
+function Set-EnvDefault {
+    param(
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][string]$Key,
+        [Parameter(Mandatory = $true)][string]$Value
+    )
+    $pattern = "(?m)^" + [Regex]::Escape($Key) + "=.*$"
+    if ([Regex]::IsMatch($Text, $pattern)) {
+        return $Text
+    }
+    return $Text.TrimEnd() + [Environment]::NewLine + "$Key=$Value" + [Environment]::NewLine
+}
+
 function Get-EnvValueFromText {
     param(
         [Parameter(Mandatory = $true)][string]$Text,
@@ -155,13 +168,25 @@ foreach ($requiredOrigin in @($pagesOrigin, "http://127.0.0.1:5500", "http://loc
     }
 }
 
-$envText = Set-EnvValue -Text $envText -Key "APP_VERSION" -Value "1.2.0"
+$envText = Set-EnvValue -Text $envText -Key "APP_VERSION" -Value "1.3.0"
 $envText = Set-EnvValue -Text $envText -Key "DATABASE_URL" -Value "sqlite:///$normalizedInstall/data/kanban.db"
 $envText = Set-EnvValue -Text $envText -Key "LOG_DIR" -Value "$normalizedInstall/logs"
 $envText = Set-EnvValue -Text $envText -Key "RUN_DIR" -Value "$normalizedInstall/run"
 $envText = Set-EnvValue -Text $envText -Key "BACKUP_DIR" -Value "$normalizedInstall/backups"
 $envText = Set-EnvValue -Text $envText -Key "ALLOWED_ORIGINS" -Value ($origins -join ",")
 $envText = Set-EnvValue -Text $envText -Key "GITHUB_PAGES_URL" -Value $pagesUrl
+$envText = Set-EnvValue -Text $envText -Key "FRONTEND_URL" -Value $pagesUrl
+$envText = Set-EnvDefault -Text $envText -Key "INVITATION_EXPIRE_HOURS" -Value "72"
+$envText = Set-EnvDefault -Text $envText -Key "PASSWORD_RESET_EXPIRE_MINUTES" -Value "30"
+$envText = Set-EnvDefault -Text $envText -Key "EMAIL_ENABLED" -Value "false"
+$envText = Set-EnvDefault -Text $envText -Key "SMTP_HOST" -Value ""
+$envText = Set-EnvDefault -Text $envText -Key "SMTP_PORT" -Value "587"
+$envText = Set-EnvDefault -Text $envText -Key "SMTP_USERNAME" -Value ""
+$envText = Set-EnvDefault -Text $envText -Key "SMTP_PASSWORD" -Value ""
+$envText = Set-EnvDefault -Text $envText -Key "SMTP_USE_TLS" -Value "true"
+$envText = Set-EnvDefault -Text $envText -Key "SMTP_TIMEOUT_SECONDS" -Value "15"
+$envText = Set-EnvDefault -Text $envText -Key "EMAIL_FROM_ADDRESS" -Value ""
+$envText = Set-EnvDefault -Text $envText -Key "EMAIL_FROM_NAME" -Value "Kanban Board"
 $envText = Set-EnvValue -Text $envText -Key "REPOSITORY_PATH" -Value $normalizedRepository
 $envText = Set-EnvValue -Text $envText -Key "FRONTEND_REPOSITORY_PATH" -Value $normalizedRepository
 $envText = Set-EnvValue -Text $envText -Key "RUNTIME_CONFIG_PATH" -Value "frontend/runtime-config.json"
@@ -218,5 +243,5 @@ Write-Host ""
 Write-Host "Установка завершена."
 Write-Host "Следующий шаг - создать пользователя:"
 Write-Host "  cd `"$backendDir`""
-Write-Host "  .\.venv\Scripts\python.exe -m scripts.manage_users create <username> --display-name `"<Имя>`""
+Write-Host "  .\.venv\Scripts\python.exe -m scripts.manage_users create <username> --display-name `"<Имя>`" --email `"user@example.com`""
 Write-Host "После создания пользователей запустите от администратора: .\scripts\start-kanban-server.ps1"

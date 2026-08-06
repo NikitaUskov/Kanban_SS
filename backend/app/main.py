@@ -13,8 +13,10 @@ from app.columns.router import router as columns_router
 from app.config import get_settings
 from app.errors import register_exception_handlers
 from app.health.router import router as health_router
+from app.invitations.router import router as invitations_router
 from app.logging_config import configure_logging
 from app.middleware import RequestContextMiddleware
+from app.notifications.router import router as notifications_router
 from app.users.router import router as users_router
 
 configure_logging()
@@ -57,3 +59,5 @@ app.include_router(boards_router, prefix=api_prefix)
 app.include_router(columns_router, prefix=api_prefix)
 app.include_router(cards_router, prefix=api_prefix)
 app.include_router(users_router, prefix=api_prefix)
+app.include_router(invitations_router, prefix=api_prefix)
+app.include_router(notifications_router, prefix=api_prefix)

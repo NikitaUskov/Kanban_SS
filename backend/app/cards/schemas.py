@@ -1,4 +1,4 @@
-"""Card, comments and checklist request and response schemas."""
+"""Card, subtasks, comments and checklist request/response schemas."""
 
 from datetime import UTC, datetime
 from typing import Literal
@@ -49,6 +49,7 @@ class CardResponse(ORMModel):
     id: str
     board_id: str
     column_id: str
+    parent_card_id: str | None
     title: str
     description: str | None
     priority: Priority
@@ -68,17 +69,21 @@ class CardResponse(ORMModel):
     comment_count: int
     checklist_total: int
     checklist_completed: int
+    subtask_total: int
+    subtask_completed: int
 
 
 class CardDetailResponse(CardResponse):
     comments: list[CommentResponse]
     checklist_items: list[ChecklistItemResponse]
+    subtasks: list[CardResponse]
 
 
 class CardCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     column_id: UUID
+    parent_card_id: UUID | None = None
     title: str = Field(min_length=1, max_length=200)
     description: str | None = Field(default=None, max_length=20_000)
     priority: Priority = "normal"
@@ -152,7 +157,6 @@ class CardUpdate(BaseModel):
 
 class VersionedMutation(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     expected_version: int = Field(ge=1)
     client_request_id: UUID | None = None
 
@@ -164,7 +168,6 @@ class CardMove(VersionedMutation):
 
 class CardRestore(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     target_column_id: UUID | None = None
     target_index: int | None = Field(default=None, ge=0)
     expected_version: int = Field(ge=1)
@@ -173,7 +176,6 @@ class CardRestore(BaseModel):
 
 class CommentCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     body: str = Field(min_length=1, max_length=10_000)
     client_request_id: UUID | None = None
 
@@ -188,7 +190,6 @@ class CommentCreate(BaseModel):
 
 class CommentUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     body: str = Field(min_length=1, max_length=10_000)
     expected_version: int = Field(ge=1)
     client_request_id: UUID | None = None
@@ -204,7 +205,6 @@ class CommentUpdate(BaseModel):
 
 class ChecklistItemCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     text: str = Field(min_length=1, max_length=500)
     target_index: int | None = Field(default=None, ge=0)
     client_request_id: UUID | None = None
@@ -220,7 +220,6 @@ class ChecklistItemCreate(BaseModel):
 
 class ChecklistItemUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     text: str | None = Field(default=None, min_length=1, max_length=500)
     is_completed: bool | None = None
     expected_version: int = Field(ge=1)

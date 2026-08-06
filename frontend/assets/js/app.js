@@ -1,5 +1,6 @@
 import { ApiClient, ApiError } from "./api.js";
 import { CardDrawerController, initials } from "./card-detail.js";
+import { TeamController } from "./team.js";
 import {
   EXPECTED_API_VERSION,
   FRONTEND_VERSION,
@@ -59,6 +60,31 @@ const cardDrawer = new CardDrawerController({
   reloadSnapshot: () => loadSnapshot(),
   handleMutationError,
 });
+
+const team = new TeamController({
+  api,
+  state,
+  openBoard: (boardId) => openBoard(boardId),
+  openCard: (cardId) => cardDrawer.open(cardId),
+  showLogin,
+  openPasswordDialog,
+});
+
+function currentBoardRole() {
+  return state.snapshot?.board?.current_user_role || null;
+}
+
+function canEditBoardContent() {
+  return ["admin", "editor"].includes(currentBoardRole());
+}
+
+function canAdministerBoard() {
+  return currentBoardRole() === "admin";
+}
+
+function canCreateBoards() {
+  return ["owner", "admin"].includes(state.user?.role);
+}
 
 function mutationId() {
   return crypto.randomUUID();
@@ -168,10 +194,12 @@ async function onRuntimeConfigChanged(next) {
 
 function showLogin(message = "", clearTokens = true) {
   cardDrawer.close();
+  team.loggedOut();
   if (clearTokens) api.tokens.clear();
   state.user = null;
   state.currentBoardId = null;
   state.snapshot = null;
+  state.boardMembers = [];
   stopPolling();
   setHidden("app-shell", true);
   setHidden("login-view", false);
@@ -229,10 +257,11 @@ async function enterApplication(user) {
   setHidden("login-view", true);
   setHidden("app-shell", false);
   api.scheduleRefresh();
-  const directory = await api.request("/users?active_only=true");
-  state.users = directory.items;
+  state.users = [];
+  state.boardMembers = [];
   showBoardsView();
   await loadBoards();
+  await team.afterLogin();
 }
 
 function activeFilterCount() {
@@ -275,6 +304,8 @@ function showBoardsView() {
   stopPolling();
   state.currentBoardId = null;
   state.snapshot = null;
+  state.boardMembers = [];
+  state.users = [];
   setFiltersPanelOpen(false, { persist: false });
   setHidden("board-view", true);
   setHidden("boards-view", false);
@@ -298,7 +329,7 @@ function renderBoards() {
   byId("toggle-board-archive").textContent = state.archivedBoards
     ? "Вернуться к активным"
     : "Показать архив";
-  byId("create-board-button").hidden = state.archivedBoards;
+  byId("create-board-button").hidden = state.archivedBoards || !canCreateBoards();
   if (!state.boards.length) {
     grid.append(
       element("div", {
@@ -318,7 +349,7 @@ function renderBoards() {
     });
     const actions = element("div", { className: "board-card__actions" });
     if (state.archivedBoards) {
-      actions.append(
+      if (board.current_user_role === "admin") actions.append(
         button("Восстановить", "button button--primary", async () => {
           if (!window.confirm(`Восстановить доску «${board.title}»?`)) return;
           try {
@@ -337,10 +368,12 @@ function renderBoards() {
         }),
       );
     } else {
-      actions.append(
-        button("Открыть", "button button--primary", () => openBoard(board.id)),
-        button("Настройки", "button button--secondary", () => openBoardEditor(board)),
-      );
+      actions.append(button("Открыть", "button button--primary", () => openBoard(board.id)));
+      if (board.current_user_role === "admin") {
+        actions.append(
+          button("Настройки", "button button--secondary", () => openBoardEditor(board)),
+        );
+      }
     }
     grid.append(
       element("article", { className: "board-card" }, [title, description, actions]),
@@ -375,7 +408,10 @@ async function loadSnapshot(includeArchived = false) {
     `/boards/${state.currentBoardId}/snapshot?include_archived=${includeArchived}`,
   );
   if (!includeArchived) {
+    const members = await api.request(`/boards/${state.currentBoardId}/members`);
     state.snapshot = snapshot;
+    state.boardMembers = members.items;
+    state.users = members.items.map((item) => item.user);
     renderBoard();
   }
   return snapshot;
@@ -426,6 +462,11 @@ function renderBoard() {
   byId("board-description").textContent = snapshot.board.description || "Без описания";
   rebuildFilterOptions();
   syncFilterInputs();
+  const canAdmin = canAdministerBoard();
+  byId("edit-board-button").hidden = !canAdmin;
+  byId("create-column-button").hidden = !canAdmin;
+  byId("card-archive-button").hidden = !canAdmin;
+  team.updateBoardAccessButtons();
   renderColumns();
 }
 
@@ -466,6 +507,8 @@ function renderColumns() {
   byId("drag-filter-note").hidden = !filtering;
   updateFilterToggle();
   const collapsed = collapsedColumnIds();
+  const canEdit = canEditBoardContent();
+  const canAdmin = canAdministerBoard();
   const sortedColumns = [...snapshot.columns].sort((a, b) => a.position - b.position);
   if (!sortedColumns.length) {
     container.append(
@@ -486,7 +529,7 @@ function renderColumns() {
     const isCollapsed = collapsed.has(column.id);
     const header = element("div", {
       className: "column-header",
-      attrs: { draggable: filtering || isCollapsed ? "false" : "true" },
+      attrs: { draggable: filtering || isCollapsed || !canAdmin ? "false" : "true" },
       dataset: { columnId: column.id },
     });
     const collapseButton = button(
@@ -509,12 +552,12 @@ function renderColumns() {
         }),
       );
     }
-    if (!isCollapsed) {
+    if (!isCollapsed && canAdmin) {
       header.append(
         button("•••", "column-menu", () => openColumnEditor(column), "Настройки колонки"),
       );
     }
-    if (!filtering && !isCollapsed) {
+    if (!filtering && !isCollapsed && canAdmin) {
       header.addEventListener("dragstart", (event) => startColumnDrag(event, column.id));
       header.addEventListener("dragend", finishDrag);
     }
@@ -525,9 +568,9 @@ function renderColumns() {
         className: "card-list",
         dataset: { columnId: column.id },
       });
-      for (const card of cards) list.append(renderCard(card, filtering));
+      for (const card of cards) list.append(renderCard(card, filtering || !canEdit));
       list.addEventListener("dragover", (event) => {
-        if (dragContext?.kind !== "card") return;
+        if (!canEdit || dragContext?.kind !== "card") return;
         event.preventDefault();
         list.closest(".kanban-column")?.classList.add("kanban-column--drop");
       });
@@ -535,15 +578,17 @@ function renderColumns() {
         list.closest(".kanban-column")?.classList.remove("kanban-column--drop"),
       );
       list.addEventListener("drop", (event) => dropCard(event, column.id, list));
-      children.push(
-        list,
-        button(
-          "Добавить карточку",
-          "button add-card-button",
-          () => openCardEditor(null, column.id),
-          `Добавить карточку в колонку ${column.title}`,
-        ),
-      );
+      children.push(list);
+      if (canEdit) {
+        children.push(
+          button(
+            "Добавить карточку",
+            "button add-card-button",
+            () => openCardEditor(null, column.id),
+            `Добавить карточку в колонку ${column.title}`,
+          ),
+        );
+      }
     }
     const columnNode = element(
       "section",
@@ -596,6 +641,15 @@ function renderCard(card, filtering) {
         className: "card-indicator",
         text: `💬 ${card.comment_count}`,
         title: "Комментарии",
+      }),
+    );
+  }
+  if (card.subtask_total) {
+    indicators.append(
+      element("span", {
+        className: "card-indicator",
+        text: `Подзадачи ${card.subtask_completed}/${card.subtask_total}`,
+        title: "Прогресс подзадач",
       }),
     );
   }
@@ -1225,6 +1279,7 @@ function updateFilters() {
 }
 function bindEvents() {
   cardDrawer.bind();
+  team.bind();
   configStore.subscribe(onRuntimeConfigChanged);
   byId("login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1329,6 +1384,7 @@ async function initialize() {
   try {
     await configStore.load();
     await checkCompatibility();
+    await team.initializePublicFlow();
     if (!api.tokens.accessToken && api.tokens.refreshToken) await api.refresh();
     if (api.tokens.accessToken) {
       const user = await api.request("/auth/me");

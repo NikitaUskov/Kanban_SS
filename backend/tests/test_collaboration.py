@@ -29,6 +29,12 @@ def create_card(client, board, headers, *, assignee_user_id=None):
 
 
 def test_active_user_directory_and_assignee_completion(client, board, users, owner_headers):
+    membership = client.put(
+        f"/api/v1/boards/{board['id']}/members/{users['colleague']['id']}",
+        headers=owner_headers,
+        json={"role": "editor"},
+    )
+    assert membership.status_code == 200, membership.text
     directory = client.get("/api/v1/users?active_only=true", headers=owner_headers)
     assert directory.status_code == 200
     assert {item["username"] for item in directory.json()["items"]} == {
@@ -73,8 +79,14 @@ def test_active_user_directory_and_assignee_completion(client, board, users, own
 
 
 def test_comments_are_counted_and_only_author_can_edit(
-    client, board, owner_headers, colleague_headers
+    client, board, users, owner_headers, colleague_headers
 ):
+    membership = client.put(
+        f"/api/v1/boards/{board['id']}/members/{users['colleague']['id']}",
+        headers=owner_headers,
+        json={"role": "editor"},
+    )
+    assert membership.status_code == 200, membership.text
     card = create_card(client, board, owner_headers)
     created = client.post(
         f"/api/v1/cards/{card['id']}/comments",

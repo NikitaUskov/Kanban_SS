@@ -4,6 +4,7 @@
     [Parameter(Mandatory = $true)][string]$RepositoryName,
     [string]$FirstUsername = "",
     [string]$FirstDisplayName = "",
+    [string]$FirstEmail = "",
     [switch]$RegisterAutostart
 )
 
@@ -35,7 +36,11 @@ if ($FirstUsername) {
     $python = Join-Path $repositoryRoot "backend\.venv\Scripts\python.exe"
     Push-Location (Join-Path $repositoryRoot "backend")
     try {
-        & $python -m scripts.manage_users create $FirstUsername --display-name $FirstDisplayName
+        $createArguments = @("-m", "scripts.manage_users", "create", $FirstUsername, "--display-name", $FirstDisplayName)
+        if ($FirstEmail) {
+            $createArguments += @("--email", $FirstEmail)
+        }
+        & $python @createArguments
         if ($LASTEXITCODE -ne 0) {
             throw "Не удалось создать первого пользователя."
         }

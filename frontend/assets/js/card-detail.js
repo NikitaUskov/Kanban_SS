@@ -42,9 +42,42 @@ export class CardDrawerController {
     byId("checklist-form").addEventListener("submit", (event) =>
       this.addChecklistItem(event),
     );
+    byId("subtask-form").addEventListener("submit", (event) =>
+      this.addSubtask(event),
+    );
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape" && !byId("card-drawer").hidden) this.close();
     });
+  }
+
+  canEdit() {
+    return ["admin", "editor"].includes(
+      this.state.snapshot?.board?.current_user_role,
+    );
+  }
+
+  setEditable(editable) {
+    for (const id of [
+      "card-detail-title",
+      "card-detail-description",
+      "card-detail-assignee",
+      "card-detail-priority",
+      "card-detail-due",
+      "card-detail-completed",
+      "checklist-new-text",
+      "comment-new-body",
+      "subtask-new-title",
+      "subtask-new-assignee",
+      "subtask-new-due",
+    ]) {
+      const node = byId(id);
+      if (node) node.disabled = !editable;
+    }
+    byId("save-card-detail").hidden = !editable;
+    byId("archive-card-detail").hidden = !editable;
+    byId("checklist-form").hidden = !editable;
+    byId("comment-form").hidden = !editable;
+    if (!this.card?.parent_card_id) byId("subtask-form").hidden = !editable;
   }
 
   populateUserSelect(select, selectedId = "") {
@@ -105,13 +138,18 @@ export class CardDrawerController {
     byId("card-detail-column").value = column?.title || "—";
     byId("card-detail-completed").checked = Boolean(card.completed_at);
     this.populateUserSelect(byId("card-detail-assignee"), card.assignee_user_id);
+    this.populateUserSelect(byId("subtask-new-assignee"));
+    const mentionUsers = this.state.users.map((user) => `@${user.username}`).join(", ");
+    byId("comment-mention-hint").textContent = mentionUsers || "нет доступных участников";
     byId("card-detail-meta").textContent = [
       `Автор: ${card.created_by.display_name}`,
       `изменено ${formatDateTime(card.updated_at)}`,
     ].join(" · ");
     byId("card-detail-error").hidden = true;
+    this.renderSubtasks();
     this.renderChecklist();
     this.renderComments();
+    this.setEditable(this.canEdit());
   }
 
   async refreshAfterMutation(message) {
@@ -188,6 +226,92 @@ export class CardDrawerController {
     }
   }
 
+  renderSubtasks() {
+    const list = byId("subtasks-list");
+    clear(list);
+    const form = byId("subtask-form");
+    if (this.card.parent_card_id) {
+      byId("subtasks-progress").textContent = "";
+      form.hidden = true;
+      list.append(
+        element("p", {
+          className: "muted compact-empty",
+          text: "Это подзадача. Дополнительный уровень вложенности не создаётся.",
+        }),
+      );
+      return;
+    }
+    form.hidden = !this.canEdit();
+    const subtasks = [...(this.card.subtasks || [])].sort((a, b) => a.position - b.position);
+    const completed = subtasks.filter((item) => item.completed_at).length;
+    byId("subtasks-progress").textContent = subtasks.length
+      ? `${completed}/${subtasks.length}`
+      : "";
+    if (!subtasks.length) {
+      list.append(
+        element("p", { className: "muted compact-empty", text: "Подзадач пока нет." }),
+      );
+      return;
+    }
+    for (const subtask of subtasks) {
+      const main = element("div", { className: "subtask-item__main" }, [
+        element("span", {
+          className: `subtask-status${subtask.completed_at ? " subtask-status--done" : ""}`,
+          text: subtask.completed_at ? "✓" : "○",
+        }),
+        element("div", {}, [
+          element("strong", { text: subtask.title }),
+          element("span", {
+            className: "muted subtask-item__meta",
+            text: [
+              subtask.assignee?.display_name || "Без ответственного",
+              subtask.due_date ? formatDateTime(subtask.due_date) : null,
+            ].filter(Boolean).join(" · "),
+          }),
+        ]),
+      ]);
+      const node = element("button", {
+        className: "subtask-item",
+        attrs: { type: "button" },
+      }, [main, element("span", { className: "subtask-arrow", text: "›" })]);
+      node.addEventListener("click", () => this.open(subtask.id));
+      list.append(node);
+    }
+  }
+
+  async addSubtask(event) {
+    event.preventDefault();
+    if (!this.card || this.card.parent_card_id || !this.canEdit()) return;
+    const titleInput = byId("subtask-new-title");
+    const title = titleInput.value.trim();
+    if (!title) return;
+    const dueInput = byId("subtask-new-due").value;
+    const assigneeId = byId("subtask-new-assignee").value;
+    const body = {
+      column_id: this.card.column_id,
+      parent_card_id: this.card.id,
+      title,
+      priority: this.card.priority,
+      client_request_id: this.mutationId(),
+    };
+    if (dueInput) body.due_date = new Date(dueInput).toISOString();
+    if (assigneeId) body.assignee_user_id = assigneeId;
+    setBusy(event.currentTarget, true, "Добавление…");
+    try {
+      await this.api.request(`/boards/${this.card.board_id}/cards`, {
+        method: "POST",
+        body,
+      });
+      event.currentTarget.reset();
+      this.populateUserSelect(byId("subtask-new-assignee"));
+      await this.refreshAfterMutation("Подзадача добавлена");
+    } catch (error) {
+      await this.handleMutationError(error);
+    } finally {
+      setBusy(event.currentTarget, false);
+    }
+  }
+
   renderChecklist() {
     const list = byId("checklist-items");
     clear(list);
@@ -207,6 +331,7 @@ export class CardDrawerController {
         attrs: { type: "checkbox", "aria-label": `Выполнение: ${item.text}` },
       });
       checkbox.checked = item.is_completed;
+      checkbox.disabled = !this.canEdit();
       checkbox.addEventListener("change", async () => {
         checkbox.disabled = true;
         try {
@@ -229,14 +354,16 @@ export class CardDrawerController {
         text: item.text,
       });
       const actions = element("div", { className: "checklist-item__actions" });
-      actions.append(
+      if (this.canEdit()) actions.append(
         button("↑", "mini-button", () => this.moveChecklist(item, index - 1), "Выше"),
         button("↓", "mini-button", () => this.moveChecklist(item, index + 1), "Ниже"),
         button("✎", "mini-button", () => this.editChecklist(item), "Изменить"),
         button("×", "mini-button mini-button--danger", () => this.deleteChecklist(item), "Удалить"),
       );
-      actions.children[0].disabled = index === 0;
-      actions.children[1].disabled = index === items.length - 1;
+      if (this.canEdit()) {
+        actions.children[0].disabled = index === 0;
+        actions.children[1].disabled = index === items.length - 1;
+      }
       list.append(element("div", { className: "checklist-item" }, [checkbox, text, actions]));
     });
   }
@@ -343,7 +470,7 @@ export class CardDrawerController {
       ]);
       const body = element("p", { className: "comment__body", text: comment.body });
       const content = element("div", { className: "comment__content" }, [header, body]);
-      if (comment.author_user_id === this.state.user.id) {
+      if (this.canEdit() && comment.author_user_id === this.state.user.id) {
         content.append(
           element("div", { className: "comment__actions" }, [
             button("Изменить", "text-button", () => this.editComment(comment)),

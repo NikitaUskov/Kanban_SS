@@ -97,7 +97,7 @@ def create_column(db: Session, board_id: str, payload: ColumnCreate, actor: User
             earlier = find_idempotent(db, request_id, "column.created")
             if earlier and earlier.entity_id:
                 return _response(db, earlier.entity_id)
-            board = require_board(db, board_id)
+            board = require_board(db, board_id, actor=actor, minimum_role="admin")
             columns = _active_columns(db, board_id)
             target_index = len(columns) if payload.target_index is None else payload.target_index
             target_index = min(target_index, len(columns))
@@ -144,7 +144,7 @@ def update_column(
             if earlier and earlier.entity_id:
                 return _response(db, earlier.entity_id)
             column = require_column(db, column_id)
-            board = require_board(db, column.board_id)
+            board = require_board(db, column.board_id, actor=actor, minimum_role="admin")
             _assert_column_version(column, payload.expected_version)
             changed: list[str] = []
             if payload.title is not None and payload.title != column.title:
@@ -190,7 +190,7 @@ def reorder_columns(
     with write_coordinator.write():
         try:
             earlier = find_idempotent(db, request_id, "column.reordered")
-            board = require_board(db, board_id)
+            board = require_board(db, board_id, actor=actor, minimum_role="admin")
             if earlier:
                 columns = _active_columns(db, board.id)
                 return ColumnOrderResponse(
@@ -261,7 +261,7 @@ def delete_column(
             if earlier and earlier.entity_id:
                 return _response(db, earlier.entity_id)
             column = require_column(db, column_id)
-            board = require_board(db, column.board_id)
+            board = require_board(db, column.board_id, actor=actor, minimum_role="admin")
             _assert_column_version(column, payload.expected_version)
             cards = list(
                 db.scalars(

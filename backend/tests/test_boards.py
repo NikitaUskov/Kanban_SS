@@ -3,14 +3,26 @@
 from uuid import uuid4
 
 
-def test_all_active_users_see_the_same_board(client, board, owner_headers, colleague_headers):
+def test_board_is_visible_only_after_access_is_granted(
+    client, board, users, owner_headers, colleague_headers
+):
     owner_list = client.get("/api/v1/boards", headers=owner_headers)
     colleague_list = client.get("/api/v1/boards", headers=colleague_headers)
     assert owner_list.status_code == 200
     assert colleague_list.status_code == 200
     assert owner_list.json()["items"][0]["id"] == board["id"]
-    assert colleague_list.json()["items"][0]["id"] == board["id"]
+    assert colleague_list.json()["items"] == []
     assert owner_list.json()["items"][0]["column_count"] == 5
+
+    granted = client.put(
+        f"/api/v1/boards/{board['id']}/members/{users['colleague']['id']}",
+        headers=owner_headers,
+        json={"role": "viewer"},
+    )
+    assert granted.status_code == 200, granted.text
+    colleague_list = client.get("/api/v1/boards", headers=colleague_headers)
+    assert colleague_list.json()["items"][0]["id"] == board["id"]
+    assert colleague_list.json()["items"][0]["current_user_role"] == "viewer"
 
 
 def test_board_create_is_idempotent(client, owner_headers):

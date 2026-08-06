@@ -10,7 +10,7 @@ def test_health_uses_versioned_public_contract(client):
     response = client.get("/api/v1/health")
     assert response.status_code == 200
     assert response.json()["status"] == "ok"
-    assert response.json()["appVersion"] == "1.2.0"
+    assert response.json()["appVersion"] == "1.3.0"
     assert response.json()["apiVersion"] == "v1"
     assert "app_version" not in response.json()
     UUID(response.headers["X-Request-ID"])
@@ -21,9 +21,12 @@ def test_ready_requires_collaboration_schema(client):
     response = client.get("/api/v1/ready")
     assert response.status_code == 200
     payload = response.json()
-    assert payload["alembicRevision"] == "20260730_0002"
+    assert payload["alembicRevision"] == "20260806_0003"
     assert "card_comments" in payload["requiredTables"]
     assert "card_checklist_items" in payload["requiredTables"]
+    assert "user_invitations" in payload["requiredTables"]
+    assert "board_members" in payload["requiredTables"]
+    assert "notifications" in payload["requiredTables"]
 
 
 def test_validation_error_is_safe_and_structured(client, owner_headers):

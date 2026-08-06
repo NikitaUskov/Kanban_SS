@@ -19,6 +19,10 @@ REQUIRED_TABLES = {
     "card_comments",
     "card_checklist_items",
     "activity_log",
+    "user_invitations",
+    "password_reset_tokens",
+    "board_members",
+    "notifications",
     "alembic_version",
 }
 

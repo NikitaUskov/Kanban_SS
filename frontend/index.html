@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
-    <meta name="description" content="Многопользовательская канбан-доска с ответственными, комментариями и чек-листами">
+    <meta name="description" content="Многопользовательская канбан-доска с приглашениями, доступами, подзадачами и уведомлениями">
     <title>Kanban Board</title>
     <link rel="stylesheet" href="./assets/css/styles.css">
   </head>
@@ -17,10 +17,10 @@
       <section class="login-card" aria-labelledby="login-title">
         <div class="brand-mark" aria-hidden="true">K</div>
         <h1 id="login-title">Kanban Board</h1>
-        <p class="muted">Войдите с учётной записью, созданной администратором.</p>
+        <p class="muted">Войдите по email или логину. Новые участники регистрируются по приглашению.</p>
         <form id="login-form" class="stack">
           <label>
-            Имя пользователя
+            Email или логин
             <input
               id="login-username"
               name="username"
@@ -41,6 +41,7 @@
           </label>
           <p id="login-error" class="form-error" role="alert" hidden></p>
           <button class="button button--primary button--full" type="submit">Войти</button>
+          <button id="forgot-password-button" class="text-button login-help-button" type="button">Забыли пароль?</button>
         </form>
         <p class="login-note">Если сервер перезапускается, страница подключится автоматически.</p>
       </section>
@@ -54,7 +55,12 @@
         </button>
         <div class="header-actions">
           <span id="connection-pill" class="connection-pill" data-state="starting">Сервер запускается</span>
-          <span id="current-user" class="current-user"></span>
+          <button id="notifications-button" class="button button--ghost notification-button" type="button" aria-label="Уведомления">
+            Уведомления <span id="notification-badge" class="notification-badge" hidden>0</span>
+          </button>
+          <button id="participants-button" class="button button--ghost" type="button" hidden>Участники</button>
+          <button id="profile-button" class="current-user current-user--button" type="button"></button>
+          <span id="current-user" class="current-user" hidden></span>
           <button id="about-button" class="button button--ghost" type="button">О системе</button>
           <button id="change-password-button" class="button button--ghost" type="button">
             Сменить пароль
@@ -69,7 +75,7 @@
             <div>
               <p class="eyebrow">Общее пространство</p>
               <h1 id="boards-title">Все доски</h1>
-              <p class="muted">Каждый активный пользователь видит и редактирует эти доски.</p>
+              <p class="muted">Здесь отображаются доски, к которым у вас есть доступ.</p>
             </div>
             <div class="button-row">
               <button id="toggle-board-archive" class="button button--secondary" type="button">
@@ -100,6 +106,9 @@
                 aria-controls="filters-panel"
               >
                 Фильтры
+              </button>
+              <button id="board-members-button" class="button button--secondary" type="button">
+                Доступы
               </button>
               <button id="activity-button" class="button button--secondary" type="button">
                 Журнал
@@ -380,6 +389,91 @@
       </div>
     </dialog>
 
+    <dialog id="invite-dialog" class="modal">
+      <form id="invite-accept-form" method="dialog" class="modal-form">
+        <div class="modal-heading">
+          <div><p class="eyebrow">Приглашение</p><h2>Создание аккаунта</h2></div>
+          <button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button>
+        </div>
+        <p id="invite-preview" class="notice"></p>
+        <label>Логин<input id="invite-username" maxlength="80" autocomplete="username" required></label>
+        <label>Имя<input id="invite-display-name" maxlength="120" required></label>
+        <label>Пароль<input id="invite-password" type="password" minlength="8" autocomplete="new-password" required></label>
+        <label>Повторите пароль<input id="invite-password-repeat" type="password" minlength="8" autocomplete="new-password" required></label>
+        <p id="invite-error" class="form-error" role="alert" hidden></p>
+        <div class="modal-actions">
+          <button class="button button--secondary" value="cancel" formnovalidate>Отмена</button>
+          <button class="button button--primary" type="submit">Создать аккаунт</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="forgot-password-dialog" class="modal">
+      <form id="forgot-password-form" method="dialog" class="modal-form">
+        <div class="modal-heading"><h2>Восстановление пароля</h2><button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button></div>
+        <p class="muted">Укажите подтверждённый email. Ответ будет одинаковым независимо от наличия аккаунта.</p>
+        <label>Email<input id="forgot-password-email" type="email" maxlength="320" autocomplete="email" required></label>
+        <p id="forgot-password-message" class="notice" hidden></p>
+        <p id="forgot-password-error" class="form-error" role="alert" hidden></p>
+        <div class="modal-actions"><button class="button button--secondary" value="cancel" formnovalidate>Отмена</button><button class="button button--primary" type="submit">Отправить инструкцию</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="reset-password-dialog" class="modal">
+      <form id="reset-password-form" method="dialog" class="modal-form">
+        <div class="modal-heading"><h2>Новый пароль</h2><button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button></div>
+        <label>Новый пароль<input id="reset-password-new" type="password" minlength="8" autocomplete="new-password" required></label>
+        <label>Повторите пароль<input id="reset-password-repeat" type="password" minlength="8" autocomplete="new-password" required></label>
+        <p id="reset-password-error" class="form-error" role="alert" hidden></p>
+        <div class="modal-actions"><button class="button button--secondary" value="cancel" formnovalidate>Отмена</button><button class="button button--primary" type="submit">Сохранить пароль</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="profile-dialog" class="modal">
+      <form id="profile-form" method="dialog" class="modal-form">
+        <div class="modal-heading"><div><p class="eyebrow">Мой аккаунт</p><h2>Профиль</h2></div><button class="icon-button" value="cancel" formnovalidate aria-label="Закрыть">×</button></div>
+        <label>Имя<input id="profile-display-name" maxlength="120" required></label>
+        <div class="profile-readonly-grid"><div><span>Email</span><strong id="profile-email">—</strong></div><div><span>Логин</span><strong id="profile-username">—</strong></div><div><span>Роль</span><strong id="profile-role">—</strong></div></div>
+        <fieldset class="settings-fieldset"><legend>Внутренние уведомления</legend>
+          <label class="checkbox-line"><input id="profile-notify-assignment" type="checkbox"> Назначение ответственным</label>
+          <label class="checkbox-line"><input id="profile-notify-mention" type="checkbox"> Упоминания в комментариях</label>
+          <label class="checkbox-line"><input id="profile-notify-due" type="checkbox"> Изменение срока</label>
+        </fieldset>
+        <p id="profile-error" class="form-error" role="alert" hidden></p>
+        <div class="modal-actions"><button id="profile-change-password" class="button button--secondary" type="button">Сменить пароль</button><button class="button button--primary" type="submit">Сохранить</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="participants-dialog" class="modal modal--xwide">
+      <div class="modal-form team-dialog">
+        <div class="modal-heading"><div><p class="eyebrow">Администрирование</p><h2>Участники</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Закрыть">×</button></div>
+        <div class="team-layout">
+          <section><div class="section-heading"><h3>Пользователи</h3><button id="refresh-participants" class="button button--ghost" type="button">Обновить</button></div><div id="participants-list" class="admin-list"></div></section>
+          <section class="invite-panel"><h3>Пригласить участника</h3>
+            <form id="admin-invite-form" class="stack">
+              <label>Email<input id="admin-invite-email" type="email" maxlength="320" required></label>
+              <label>Имя<input id="admin-invite-name" maxlength="120" required></label>
+              <label>Системная роль<select id="admin-invite-role"><option value="member">Участник</option><option value="admin">Администратор</option></select></label>
+              <label class="checkbox-line"><input id="admin-invite-send-email" type="checkbox" checked> Отправить письмо через SMTP</label>
+              <div><p class="field-label">Доступ к доскам</p><div id="admin-invite-boards" class="board-access-list"></div></div>
+              <p id="admin-invite-error" class="form-error" role="alert" hidden></p>
+              <button class="button button--primary" type="submit">Создать приглашение</button>
+            </form>
+            <div id="invite-result" class="invite-result" hidden><p>Ссылка приглашения:</p><div class="copy-line"><input id="invite-result-url" readonly><button id="copy-invite-url" class="button button--secondary" type="button">Копировать</button></div></div>
+          </section>
+        </div>
+        <section><h3>Активные приглашения</h3><div id="invitations-list" class="admin-list"></div></section>
+      </div>
+    </dialog>
+
+    <dialog id="board-members-dialog" class="modal modal--wide">
+      <div class="modal-form">
+        <div class="modal-heading"><div><p class="eyebrow">Права доски</p><h2>Доступ участников</h2></div><button class="icon-button" type="button" data-close-dialog aria-label="Закрыть">×</button></div>
+        <p class="muted">Наблюдатель только читает, редактор работает с карточками, администратор управляет доской и колонками.</p>
+        <div id="board-members-list" class="admin-list"></div>
+      </div>
+    </dialog>
+
     <dialog id="password-dialog" class="modal">
       <form id="password-form" method="dialog" class="modal-form">
         <div class="modal-heading">
@@ -479,6 +573,17 @@
         </section>
 
         <section class="card-detail__section">
+          <div class="section-heading"><div><p class="eyebrow">Декомпозиция</p><h3>Подзадачи <span id="subtasks-progress" class="section-counter"></span></h3></div></div>
+          <div id="subtasks-list" class="subtasks-list"></div>
+          <form id="subtask-form" class="subtask-create-form">
+            <input id="subtask-new-title" maxlength="200" placeholder="Название подзадачи" required>
+            <select id="subtask-new-assignee"><option value="">Без ответственного</option></select>
+            <input id="subtask-new-due" type="datetime-local" aria-label="Срок подзадачи">
+            <button class="button button--secondary" type="submit">Добавить подзадачу</button>
+          </form>
+        </section>
+
+        <section class="card-detail__section">
           <div class="section-heading">
             <div>
               <p class="eyebrow">Шаги выполнения</p>
@@ -501,11 +606,19 @@
           </div>
           <div id="comments-list" class="comments-list"></div>
           <form id="comment-form" class="comment-form">
-            <textarea id="comment-new-body" maxlength="10000" rows="3" placeholder="Написать комментарий" required></textarea>
+            <textarea id="comment-new-body" maxlength="10000" rows="3" placeholder="Написать комментарий; используйте @логин для упоминания" required></textarea>
+            <p class="field-hint">Упомянуть участника: <span id="comment-mention-hint">@логин</span></p>
             <button class="button button--primary" type="submit">Отправить</button>
           </form>
         </section>
       </div>
+    </aside>
+
+    <div id="notifications-backdrop" class="drawer-backdrop" hidden></div>
+    <aside id="notifications-drawer" class="notifications-drawer" hidden aria-labelledby="notifications-heading">
+      <div class="card-drawer__header"><div><p class="eyebrow">События для вас</p><h2 id="notifications-heading">Уведомления</h2></div><button id="close-notifications" class="icon-button" type="button" aria-label="Закрыть уведомления">×</button></div>
+      <div class="notification-actions"><button id="mark-all-notifications" class="button button--ghost" type="button">Прочитать все</button></div>
+      <div id="notifications-list" class="notifications-list"></div>
     </aside>
 
     <div id="toast-region" class="toast-region" aria-live="polite"></div>

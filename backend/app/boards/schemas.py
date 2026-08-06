@@ -1,6 +1,7 @@
-"""Board request, list and snapshot schemas."""
+"""Board request, access-control, list and snapshot schemas."""
 
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -10,10 +11,11 @@ from app.columns.schemas import ColumnResponse
 from app.schemas import ORMModel
 from app.validation import clean_optional_text, clean_single_line
 
+BoardRole = Literal["admin", "editor", "viewer"]
+
 
 class BoardCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     title: str = Field(min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=2000)
     create_default_columns: bool = True
@@ -35,7 +37,6 @@ class BoardCreate(BaseModel):
 
 class BoardUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     title: str | None = Field(default=None, min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=2000)
     clear_description: bool = False
@@ -60,7 +61,6 @@ class BoardUpdate(BaseModel):
 
 class BoardVersionMutation(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     expected_version: int = Field(ge=1)
     client_request_id: UUID | None = None
 
@@ -75,6 +75,7 @@ class BoardResponse(ORMModel):
     created_at: datetime
     updated_at: datetime
     archived_at: datetime | None
+    current_user_role: BoardRole = "viewer"
 
 
 class BoardDetail(BoardResponse):
@@ -95,3 +96,20 @@ class BoardSnapshot(BaseModel):
     columns: list[ColumnResponse]
     cards: list[CardResponse]
     server_time: datetime
+
+
+class BoardMemberUpsert(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    role: BoardRole
+
+
+class BoardMemberResponse(BaseModel):
+    board_id: str
+    user_id: str
+    role: BoardRole
+    created_at: datetime
+    user: UserBrief
+
+
+class BoardMemberList(BaseModel):
+    items: list[BoardMemberResponse]

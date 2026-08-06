@@ -41,6 +41,8 @@ def import_csv(path: Path) -> list[NewUser]:
                 username=(row.get("username") or ""),
                 display_name=(row.get("display_name") or ""),
                 password=(row.get("password") or ""),
+                email=(row.get("email") or None),
+                role=(row.get("role") or "member"),
             )
             for row in reader
         ]
@@ -56,6 +58,8 @@ def build_parser() -> argparse.ArgumentParser:
     create = commands.add_parser("create", help="Создать пользователя")
     create.add_argument("username")
     create.add_argument("--display-name", required=True)
+    create.add_argument("--email")
+    create.add_argument("--role", choices=["owner", "admin", "member"], default="member")
 
     commands.add_parser("list", help="Показать пользователей")
 
@@ -80,6 +84,8 @@ def main() -> int:
                         username=args.username,
                         display_name=args.display_name,
                         password=read_password(),
+                        email=args.email,
+                        role=args.role,
                     ),
                 )
                 logger.info("admin_action=user_created username=%s", user.username)
@@ -91,7 +97,11 @@ def main() -> int:
                 for user in users:
                     state = "активен" if user.is_active else "отключён"
                     last_login = user.last_login_at.isoformat() if user.last_login_at else "-"
-                    print(f"{user.username:24} {state:10} {user.display_name} | вход: {last_login}")
+                    email = user.email or "-"
+                    print(
+                        f"{user.username:24} {state:10} {user.role:8} "
+                        f"{user.display_name} | {email} | вход: {last_login}"
+                    )
             elif args.command == "disable":
                 user = set_user_active(db, args.username, False)
                 logger.info("admin_action=user_disabled username=%s", user.username)

@@ -56,8 +56,8 @@ def create_card_route(
 
 
 @router.get("/cards/{card_id}", response_model=CardDetailResponse)
-def get_card_route(card_id: UUID, db: DbSession, _user: CurrentUser) -> CardDetailResponse:
-    return get_card(db, str(card_id))
+def get_card_route(card_id: UUID, db: DbSession, user: CurrentUser) -> CardDetailResponse:
+    return get_card(db, str(card_id), user)
 
 
 @router.patch("/cards/{card_id}", response_model=CardResponse)

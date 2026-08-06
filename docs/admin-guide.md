@@ -1,30 +1,112 @@
-# Инструкция владельца и администратора Kanban Board 1.2.0
+# Инструкция владельца и администратора Kanban Board 1.3.0
 
-Команды ниже рассчитаны на серверную установку в `D:\Kanban\repository`.
+## Роли
 
-## Ежедневные команды
+### Системные роли
 
-```powershell
-cd D:\Kanban\repository
+- `owner` — полный доступ; назначение владельцев; защита последнего владельца;
+- `admin` — управление участниками, приглашениями и досками, кроме защищённых действий владельца;
+- `member` — доступ только к назначенным доскам.
 
-# Проверить backend, tunnel, public config и Git
-.\scripts\status-kanban.ps1
+### Роли на доске
 
-# Запустить — PowerShell от имени администратора
-.\scripts\start-kanban-server.ps1
+- `admin` — настройки доски, колонки, участники, архив;
+- `editor` — карточки, подзадачи, ответственные, комментарии и чек-листы;
+- `viewer` — только просмотр.
 
-# Остановить
-.\scripts\stop-kanban.ps1
+## Приглашение участника
 
-# Создать согласованный SQLite backup
-.\scripts\backup-kanban.ps1
+1. Войдите владельцем или администратором.
+2. Откройте «Участники».
+3. Нажмите «Пригласить».
+4. Укажите email, имя, системную роль и доступ к доскам.
+5. Создайте приглашение.
+
+Если SMTP включён, письмо отправляется автоматически. Если выключен, скопируйте ссылку. Ссылка имеет вид:
+
+```text
+https://<owner>.github.io/<repository>/?invite=<token>
 ```
 
-## Пользователи
+Токен показывается только в созданной/повторно созданной ссылке; в базе хранится его хеш.
+
+## Управление приглашениями
+
+В разделе «Участники» доступны:
+
+- повторная отправка;
+- копирование новой ссылки;
+- отзыв приглашения;
+- статусы `created`, `sent`, `failed`, `disabled`;
+- информация о сроке, принятии и ошибке SMTP.
+
+По умолчанию приглашение действует 72 часа.
+
+## Существующие пользователи
+
+После обновления старые аккаунты сохраняются. Им можно добавить email в карточке пользователя. Вход поддерживает и email, и прежний username.
+
+## Управление пользователем
+
+Администратор может:
+
+- изменить отображаемое имя;
+- назначить или очистить email;
+- изменить роль;
+- включить/отключить аккаунт;
+- создать ссылку восстановления пароля;
+- отозвать сессии через смену/сброс пароля;
+- изменить доступы к доскам.
+
+Нельзя отключить или понизить последнего активного владельца.
+
+## Восстановление пароля
+
+Пользователь нажимает «Забыли пароль?» и вводит email. Ответ системы всегда одинаковый, чтобы не раскрывать наличие аккаунта.
+
+Администратор может создать ручную ссылку в разделе участников. По умолчанию ссылка действует 30 минут. После смены пароля refresh-сессии пользователя отзываются.
+
+## Доступ к доске
+
+Откройте доску → настройки доступа. Добавьте активного пользователя и выберите `admin`, `editor` или `viewer`. Удаление членства сразу убирает доску из списка пользователя.
+
+Создатель новой доски автоматически получает роль администратора доски.
+
+## Подзадачи
+
+Откройте карточку и раздел «Подзадачи». Подзадача является полноценной карточкой, но глубина ограничена одним уровнем. У неё могут быть:
+
+- ответственный;
+- срок;
+- приоритет;
+- комментарии;
+- чек-лист;
+- завершение.
+
+Подзадача не может содержать собственные подзадачи. Родитель показывает прогресс выполненных подзадач.
+
+## Упоминания и уведомления
+
+В комментарии используйте `@username`. Упомянутый участник доски получает уведомление. Уведомление также создаётся при назначении ответственным.
+
+В профиле пользователь может отключить отдельные категории уведомлений. Центр уведомлений позволяет отметить одно или все сообщения прочитанными.
+
+## CLI — аварийное управление
 
 ```powershell
 cd D:\Kanban\repository\backend
 ```
+
+Создать пользователя:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.manage_users create user01 `
+  --display-name "Иван Иванов" `
+  --email "user01@example.com" `
+  --role member
+```
+
+Первый пользователь пустой базы автоматически станет `owner`.
 
 Список:
 
@@ -32,235 +114,82 @@ cd D:\Kanban\repository\backend
 .\.venv\Scripts\python.exe -m scripts.manage_users list
 ```
 
-Создать:
-
-```powershell
-.\.venv\Scripts\python.exe -m scripts.manage_users create user01 `
-  --display-name "Иван Петров"
-```
-
-Отключить:
+Отключение/включение:
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.manage_users disable user01
-```
-
-Включить:
-
-```powershell
 .\.venv\Scripts\python.exe -m scripts.manage_users enable user01
 ```
 
-Сбросить пароль:
+Сброс пароля:
 
 ```powershell
 .\.venv\Scripts\python.exe -m scripts.manage_users reset-password user01
 ```
 
-Пакетный импорт:
+Импорт CSV:
 
 ```powershell
-.\.venv\Scripts\python.exe -m scripts.manage_users import-csv D:\Kanban\users.csv
+.\.venv\Scripts\python.exe -m scripts.manage_users import-csv scripts\users.example.csv
 ```
 
-CSV: `username,display_name,password`. Удалите файл после импорта. Не помещайте его в Git.
+CSV: `username,display_name,password,email,role`.
 
-Физического удаления пользователя нет. Команда `disable` блокирует вход и refresh, но
-сохраняет автора комментариев, историю и ссылки на ответственного. В карточке ранее назначенный
-отключённый пользователь остаётся видимым до смены ответственного.
+## Обновление кода владельцем
 
-## Управление новой карточкой 1.2
-
-Любой активный пользователь может:
-
-- назначить активного пользователя ответственным;
-- снять ответственного;
-- завершить или вернуть задачу в активное состояние;
-- добавить пункт чек-листа, изменить порядок и отметить выполнение;
-- добавить комментарий;
-- редактировать и удалять только собственный комментарий.
-
-Отключённые пользователи не появляются в списке новых назначений. Все изменения фиксируются в
-`activity_log` и увеличивают revision доски.
-
-## Как заливать изменения в GitHub
-
-### 1. Перед началом
-
-```powershell
-cd D:\Kanban\repository
-git switch main
-git pull --ff-only origin main
-git status --short
-```
-
-Вывод `git status --short` должен быть пустым. Сервер создаёт runtime-коммиты при смене Quick
-Tunnel URL, поэтому `git pull` перед разработкой обязателен.
-
-### 2. Создайте ветку для крупной функции
-
-```powershell
-git switch -c feature/<короткое-название>
-```
-
-Небольшое исправление допустимо делать в `main`, но ветка безопаснее для изменений модели и
-миграций.
-
-### 3. Backend-проверки
+Перед push:
 
 ```powershell
 cd D:\Kanban\repository\backend
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m ruff check app scripts tests
 .\.venv\Scripts\python.exe -m ruff format --check app scripts tests
 .\.venv\Scripts\python.exe -m alembic check
 .\.venv\Scripts\python.exe -m pytest
-```
 
-После изменения моделей всегда должна существовать миграция. Не исправляйте красный
-`alembic check` случайным изменением уже применённой миграции.
-
-### 4. Frontend-проверки
-
-```powershell
-cd D:\Kanban\repository
+cd ..
 npm --prefix frontend test
-Get-ChildItem frontend\assets\js\*.js | ForEach-Object {
-  node --check $_.FullName
-}
-```
-
-### 5. Просмотр изменений
-
-```powershell
-git status --short
+npm --prefix frontend run check
 git diff --check
-git diff --stat
-git diff
 ```
 
-Добавляйте осознанные пути:
+Публикация:
 
 ```powershell
-git add backend\app backend\alembic\versions backend\tests `
-  frontend\assets frontend\index.html frontend\tests `
-  VERSION CHANGELOG.md README.md docs
-
-git commit -m "feat: add card collaboration"
-git push -u origin HEAD
+git add .
+git commit -m "feat: describe change"
+git push origin main
 ```
 
-Не используйте `git add .`, пока не просмотрен `git status`.
+Не используйте `git add .`, если в `git status` появились неизвестные секреты или базы. `.env`, `.db`, `.venv`, backup и logs должны оставаться неотслеживаемыми.
 
-### 6. GitHub Actions
+## Backup
 
-Перед обновлением сервера должны быть зелёными:
-
-- `Tests`;
-- `Deploy GitHub Pages`, если менялся `frontend/**`.
-
-При падении workflow исправляйте первую реальную ошибку. Последующие шаги часто падают только
-потому, что предыдущий не прошёл.
-
-## Обновление сервера после push в main
-
-Откройте PowerShell от имени администратора:
+Создать:
 
 ```powershell
-cd D:\Kanban\repository
-.\scripts\update-from-main.ps1 -RunTests -NoBrowser
-```
-
-Скрипт:
-
-1. требует чистое Git-дерево и ветку `main`;
-2. создаёт backup;
-3. останавливает только процессы этого Kanban;
-4. выполняет `git pull --ff-only`;
-5. обновляет Python-зависимости;
-6. выполняет `alembic upgrade head`;
-7. при `-RunTests` запускает Ruff и pytest;
-8. создаёт новый Quick Tunnel и публикует runtime-config.
-
-Если изменился только frontend, GitHub Pages обновится после push. Но серверную рабочую копию
-всё равно нужно позже синхронизировать, иначе следующий runtime commit может конфликтовать.
-
-## Выпуск новой версии
-
-1. Измените `VERSION`, `backend/app/__init__.py`, `backend/pyproject.toml`, frontend version и
-   `.env.example`.
-2. Создайте Alembic-миграцию, если меняется схема.
-3. Обновите `CHANGELOG.md` и документацию.
-4. Выполните все проверки.
-5. Создайте release commit и tag:
-
-```powershell
-git switch main
-git pull --ff-only origin main
-git merge --ff-only feature/<ветка>
-git commit -m "release: Kanban Board 1.2.0"   # если release-commit ещё не создан
-git tag -a v1.2.0 -m "Kanban Board 1.2.0"
-git push origin main --tags
-```
-
-## Backup и восстановление
-
-Создать backup:
-
-```powershell
-cd D:\Kanban\repository
 .\scripts\backup-kanban.ps1
 ```
 
-Проверить список:
-
-```powershell
-Get-ChildItem D:\Kanban\backups | Sort-Object LastWriteTime -Descending
-```
-
-Восстановить:
-
-```powershell
-.\scripts\restore-kanban.ps1 `
-  -BackupPath "D:\Kanban\backups\kanban_20260730_120000.db"
-```
-
-После restore:
-
-```powershell
-cd .\backend
-.\.venv\Scripts\python.exe -m alembic upgrade head
-.\.venv\Scripts\python.exe -m alembic check
-```
-
-## Логи и диагностика
-
-```powershell
-cd D:\Kanban\repository
-.\scripts\status-kanban.ps1
-
-Get-Content D:\Kanban\logs\backend-stderr.log -Tail 100
-Get-Content D:\Kanban\logs\cloudflared-stderr.log -Tail 100
-Get-Content D:\Kanban\logs\kanban-backend.log -Tail 100
-```
-
-Локальные проверки:
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8000/api/v1/health | Format-List
-Invoke-RestMethod http://127.0.0.1:8000/api/v1/ready | Format-List
-```
-
-## Аварийная остановка
-
-Сначала используйте штатный скрипт:
+Остановить и восстановить:
 
 ```powershell
 .\scripts\stop-kanban.ps1
+.\scripts\restore-kanban.ps1 -BackupPath "D:\Kanban\backups\kanban_<date>.db"
+.\scripts\start-kanban-server.ps1
 ```
 
-Он проверяет не только PID, но и имя/командную строку процесса. Устаревший PID-файл удаляется,
-а чужой процесс не останавливается.
+После восстановления проверьте `/api/v1/ready`.
 
-Не завершайте все процессы `python.exe` или `cloudflared.exe` на компьютере без проверки: они
-могут принадлежать другим приложениям.
+## Логи
+
+```text
+D:\Kanban\logs\backend-stdout.log
+D:\Kanban\logs\backend-stderr.log
+D:\Kanban\logs\cloudflared-stdout.log
+D:\Kanban\logs\cloudflared-stderr.log
+D:\Kanban\logs\kanban-backend.log
+```
+
+```powershell
+Get-Content D:\Kanban\logs\backend-stderr.log -Tail 100 -Wait
+```

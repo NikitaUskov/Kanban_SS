@@ -14,10 +14,7 @@ class Settings(BaseSettings):
     """Validated runtime configuration."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-        extra="ignore",
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False, extra="ignore"
     )
 
     app_env: str = "development"
@@ -30,20 +27,30 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_hours: int = Field(default=12, ge=1, le=168)
     refresh_token_expire_days: int = Field(default=30, ge=1, le=365)
+    invitation_expire_hours: int = Field(default=72, ge=1, le=720)
+    password_reset_expire_minutes: int = Field(default=30, ge=5, le=1440)
     allowed_origins: Annotated[list[str], NoDecode] = Field(
-        default_factory=lambda: [
-            "http://127.0.0.1:5500",
-            "http://localhost:5500",
-        ]
+        default_factory=lambda: ["http://127.0.0.1:5500", "http://localhost:5500"]
     )
     log_level: str = "INFO"
     log_dir: Path = Path("./logs")
     github_pages_url: str = "http://127.0.0.1:5500/"
+    frontend_url: str = "http://127.0.0.1:5500/"
     repository_path: Path = Path(".")
     frontend_repository_path: Path = Path(".")
     runtime_config_path: Path = Path("frontend/runtime-config.json")
     login_attempt_limit: int = Field(default=10, ge=1, le=100)
     login_attempt_window_minutes: int = Field(default=10, ge=1, le=1440)
+
+    email_enabled: bool = False
+    smtp_host: str = ""
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_use_tls: bool = True
+    smtp_timeout_seconds: int = Field(default=15, ge=3, le=120)
+    email_from_address: str = ""
+    email_from_name: str = "Kanban Board"
 
     @field_validator("allowed_origins", mode="before")
     @classmethod
@@ -51,6 +58,11 @@ class Settings(BaseSettings):
         if isinstance(value, str):
             return [item.strip().rstrip("/") for item in value.split(",") if item.strip()]
         return value
+
+    @field_validator("frontend_url", "github_pages_url")
+    @classmethod
+    def normalize_frontend_url(cls, value: str) -> str:
+        return value.strip().rstrip("/") + "/"
 
     @field_validator("log_level")
     @classmethod
@@ -79,6 +91,4 @@ class Settings(BaseSettings):
 
 @lru_cache
 def get_settings() -> Settings:
-    """Return a process-wide immutable settings instance."""
-
     return Settings()

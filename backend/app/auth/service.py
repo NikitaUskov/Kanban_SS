@@ -2,7 +2,7 @@
 
 from datetime import timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.orm import Session
 
 from app.auth.rate_limit import login_limiter
@@ -58,10 +58,13 @@ def login(db: Session, username: str, password: str, ip_address: str) -> TokenPa
             {"retryAfterSeconds": retry_after},
         )
 
-    user = db.scalar(select(User).where(User.username == username.lower()))
+    identifier = username.lower()
+    user = db.scalar(
+        select(User).where(or_(User.username == identifier, User.email_normalized == identifier))
+    )
     if user is None or not verify_password(password, user.password_hash):
         login_limiter.record_failure(ip_address, username)
-        raise AppError(401, "INVALID_CREDENTIALS", "Неверное имя пользователя или пароль")
+        raise AppError(401, "INVALID_CREDENTIALS", "Неверный email, логин или пароль")
     if not user.is_active:
         login_limiter.record_failure(ip_address, username)
         raise AppError(403, "USER_DISABLED", "Учётная запись отключена")

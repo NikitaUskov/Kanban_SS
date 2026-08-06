@@ -1,5 +1,4 @@
-username,display_name,password
-user01,Пользователь 01,ChangeMe-01
-user02,Пользователь 02,ChangeMe-02
-user03,Пользователь 03,ChangeMe-03
-
+﻿username,display_name,password,email,role
+user01,Пользователь 01,ChangeMe-01,user01@example.com,member
+user02,Пользователь 02,ChangeMe-02,user02@example.com,member
+user03,Пользователь 03,ChangeMe-03,user03@example.com,member

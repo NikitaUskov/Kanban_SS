@@ -8,6 +8,7 @@ export const PRIORITIES = {
 export const state = {
   user: null,
   users: [],
+  boardMembers: [],
   boards: [],
   currentBoardId: null,
   snapshot: null,

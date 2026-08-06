@@ -18,8 +18,13 @@ class UserPublic(ORMModel):
     id: str
     username: str
     display_name: str
+    email: str | None
+    email_verified_at: datetime | None
+    role: str
     is_active: bool
     last_login_at: datetime | None
+    last_seen_at: datetime | None
+    notification_settings: dict
     created_at: datetime
     updated_at: datetime
 
@@ -27,7 +32,7 @@ class UserPublic(ORMModel):
 class LoginRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    username: str = Field(min_length=1, max_length=80)
+    username: str = Field(min_length=1, max_length=320)
     password: str = Field(min_length=1, max_length=1024)
 
     @field_validator("username")
@@ -38,7 +43,6 @@ class LoginRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     refresh_token: str = Field(min_length=20, max_length=4096)
 
 
@@ -48,7 +52,6 @@ class LogoutRequest(RefreshRequest):
 
 class ChangePasswordRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
-
     current_password: str = Field(min_length=1, max_length=1024)
     new_password: str = Field(min_length=8, max_length=1024)
 

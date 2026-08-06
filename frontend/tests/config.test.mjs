@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { RuntimeConfigStore, validateRuntimeConfig } from "../assets/js/config.js";
+import { FRONTEND_VERSION, RuntimeConfigStore, validateRuntimeConfig } from "../assets/js/config.js";
 
 test("runtime config accepts HTTPS API v1", () => {
   const value = validateRuntimeConfig({
     apiBaseUrl: "https://sample.trycloudflare.com/api/v1",
     generatedAt: "2026-07-27T12:00:00Z",
     configVersion: 5,
-    appVersion: "1.2.0",
+    appVersion: "1.3.0",
     apiVersion: "v1",
   });
   assert.equal(value.configVersion, 5);
@@ -54,3 +54,8 @@ test("store reports a changed tunnel without page reload", async () => {
   assert.equal(changed.next.configVersion, 2);
 });
 
+
+
+test("frontend version is 1.3.0", () => {
+  assert.equal(FRONTEND_VERSION, "1.3.0");
+});

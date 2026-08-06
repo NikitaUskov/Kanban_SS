@@ -11,6 +11,8 @@ def test_backup_verification_includes_collaboration_tables(client):
     assert response.status_code == 200
 
     result = verify_database(Path("test-kanban.db"))
-    assert result["alembicRevision"] == "20260730_0002"
+    assert result["alembicRevision"] == "20260806_0003"
     assert "card_comments" in result["rowCounts"]
     assert "card_checklist_items" in result["rowCounts"]
+    assert "board_members" in result["rowCounts"]
+    assert "notifications" in result["rowCounts"]
